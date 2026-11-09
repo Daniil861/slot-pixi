@@ -1,6 +1,6 @@
 import { Container, Sprite } from 'pixi.js';
 import { CELL_SIZE, REEL_COUNT, ROW_COUNT, SYMBOL_SIZE } from '../../config/gameConfig';
-import type { Grid } from '../../server/MockRgs';
+import type { Grid } from '../../server/RgsClient';
 import type { SymbolTextures } from './SymbolTextures';
 
 export const REELS_WIDTH = CELL_SIZE * REEL_COUNT;   // 1000

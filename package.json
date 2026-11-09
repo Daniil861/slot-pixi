@@ -10,6 +10,7 @@
     "assets": "node scripts/build-assets.mjs"
   },
   "dependencies": {
+    "eventemitter3": "^5.0.4",
     "pixi.js": "^8.22.0"
   },
   "devDependencies": {

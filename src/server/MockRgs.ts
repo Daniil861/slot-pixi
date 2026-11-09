@@ -2,37 +2,19 @@
 // а сетку, выигрыши и баланс считает сервер. Здесь то же самое, но локально и с задержкой сети.
 
 import {
-    PAYLINES, REEL_COUNT, ROW_COUNT, START_BALANCE, SYMBOLS, WILD,
+    BETS, PAYLINES, REEL_COUNT, ROW_COUNT, START_BALANCE, SYMBOLS, WILD,
     type SymbolId,
 } from '../config/gameConfig';
+import type { Grid, InitResult, LineWin, RgsClient, SpinResult } from './RgsClient';
 
-/** grid[reel][row] — символы видимого окна, как их надо показать на барабанах. */
-export type Grid = SymbolId[][];
-
-export interface LineWin {
-    lineIndex: number;
-    symbol: SymbolId;
-    count: number;
-    amount: number;
-    /** Позиции выигрышных символов: [reel, row]. */
-    positions: [reel: number, row: number][];
-}
-
-export interface SpinResult {
-    grid: Grid;
-    wins: LineWin[];
-    totalWin: number;
-    /** Баланс после списания ставки и начисления выигрыша. */
-    balance: number;
-}
-
-export class MockRgs {
+export class MockRgs implements RgsClient {
     private balance = START_BALANCE;
 
     constructor(private readonly latencyMs = 300) {}
 
-    getBalance(): number {
-        return this.balance;
+    async init(): Promise<InitResult> {
+        await delay(this.latencyMs);
+        return { balance: this.balance, grid: randomGrid(), bets: BETS };
     }
 
     async spin(bet: number): Promise<SpinResult> {
