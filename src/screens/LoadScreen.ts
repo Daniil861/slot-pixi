@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/gameConfig';
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/layout';
 import { fitContain } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 

@@ -8,10 +8,12 @@ interface GameModelEvents {
     balanceChanged: [balance: number];
     betChanged: [bet: number];
     stateChanged: [state: GameState];
+    turboChanged: [turbo: boolean];
 }
 
 /**
- * Состояние клиента: баланс, ставка, текущее состояние игры. Без Pixi и без логики сценария.
+ * Состояние клиента: баланс, ставка, текущее состояние игры, выбор игрока (turbo).
+ * Без Pixi и без логики сценария.
  * UI подписывается на события и перерисовывается сам: баланс в панели меняется только
  * через модель — так он не может разойтись с тем, что знает игра.
  */
@@ -20,6 +22,7 @@ export class GameModel extends EventEmitter<GameModelEvents> {
     private _state: GameState = 'idle';
     private bets: readonly number[] = [];
     private betIndex = 0;
+    private _turbo = false;
 
     get balance(): number {
         return this._balance;
@@ -39,6 +42,17 @@ export class GameModel extends EventEmitter<GameModelEvents> {
         if (value === this._state) return;
         this._state = value;
         this.emit('stateChanged', value);
+    }
+
+    /** Выбор игрока. Какие тайминги соответствуют turbo — решает отображение (config/reels.ts). */
+    get turbo(): boolean {
+        return this._turbo;
+    }
+
+    set turbo(value: boolean) {
+        if (value === this._turbo) return;
+        this._turbo = value;
+        this.emit('turboChanged', value);
     }
 
     get bet(): number {

@@ -1,7 +1,7 @@
 // Контракт клиента с сервером (RGS — Remote Game Server). Игра знает только этот интерфейс:
 // MockRgs можно заменить на HttpRgsClient (fetch/WebSocket к настоящему серверу), не трогая game/ и views/.
 
-import type { SymbolId } from '../config/gameConfig';
+import type { SymbolId } from '../config/game';
 
 /** grid[reel][row] — символы видимого окна, как их надо показать на барабанах. */
 export type Grid = SymbolId[][];

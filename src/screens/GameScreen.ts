@@ -1,11 +1,12 @@
 import { Container, Sprite, Text, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/gameConfig';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, REELS_HEIGHT, REELS_WIDTH } from '../config/layout';
+import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 import { GameController } from '../game/GameController';
 import type { GameModel } from '../game/GameModel';
 import type { RgsClient } from '../server/RgsClient';
-import { REELS_HEIGHT, REELS_WIDTH, ReelsView } from '../views/reels/ReelsView';
+import { ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
 
 /**
@@ -34,7 +35,7 @@ export class GameScreen extends Container implements Screen {
         this.background.anchor.set(0.5);
         this.addChild(this.background, this.content);
 
-        this.reels = new ReelsView(new SymbolTextures(renderer));
+        this.reels = new ReelsView(new SymbolTextures(renderer), this.currentTiming());
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
 
@@ -50,9 +51,13 @@ export class GameScreen extends Container implements Screen {
         this.reels.cursor = 'pointer';
         this.reels.on('pointertap', () => void this.controller.spin());
 
+        // Временно: T — переключить turbo. Сессия 3 — кнопка в UI.
+        window.addEventListener('keydown', this.onKeyDown);
+
         // Модель → отображение.
         this.model.on('balanceChanged', this.updateInfo, this);
         this.model.on('betChanged', this.updateInfo, this);
+        this.model.on('turboChanged', this.onTurboChanged, this);
     }
 
     async show(): Promise<void> {
@@ -78,10 +83,30 @@ export class GameScreen extends Container implements Screen {
     override destroy(options?: DestroyOptions): void {
         this.model.off('balanceChanged', this.updateInfo, this);
         this.model.off('betChanged', this.updateInfo, this);
+        this.model.off('turboChanged', this.onTurboChanged, this);
+        window.removeEventListener('keydown', this.onKeyDown);
         super.destroy(options);
     }
 
+    /** Выбор игрока → пресет таймингов. Сами барабаны о режимах не знают. */
+    private currentTiming() {
+        return this.model.turbo ? TURBO_TIMING : NORMAL_TIMING;
+    }
+
+    private onTurboChanged(): void {
+        this.reels.setTiming(this.currentTiming());
+        this.updateInfo();
+    }
+
+    /** Стрелочная функция-поле: this привязан, и ту же ссылку можно передать в removeEventListener. */
+    private readonly onKeyDown = (event: KeyboardEvent): void => {
+        if (event.code === 'KeyT') {
+            this.model.turbo = !this.model.turbo;
+        }
+    };
+
     private updateInfo(): void {
-        this.infoText.text = `BALANCE ${this.model.balance}    BET ${this.model.bet}`;
+        const turbo = this.model.turbo ? '    TURBO' : '';
+        this.infoText.text = `BALANCE ${this.model.balance}    BET ${this.model.bet}${turbo}`;
     }
 }

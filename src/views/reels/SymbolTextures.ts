@@ -1,5 +1,5 @@
 import { Assets, Container, Graphics, Text, Texture, type Renderer } from 'pixi.js';
-import { SYMBOLS, type SymbolId } from '../../config/gameConfig';
+import { SYMBOL_IDS, type SymbolId } from '../../config/game';
 
 const PLACEHOLDER_SIZE = 256;
 
@@ -12,7 +12,7 @@ export class SymbolTextures {
     private readonly textures = new Map<SymbolId, Texture>();
 
     constructor(renderer: Renderer) {
-        for (const { id } of SYMBOLS) {
+        for (const id of SYMBOL_IDS) {
             // Assets.cache — общий кэш загруженного. Spritesheet кладёт туда каждый кадр по имени.
             if (Assets.cache.has(id)) {
                 this.textures.set(id, Texture.from(id));

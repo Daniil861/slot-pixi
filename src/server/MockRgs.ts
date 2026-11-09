@@ -1,9 +1,8 @@
 // Имитация RGS (Remote Game Server). В реальном слоте клиент только отображает результат,
 // а сетку, выигрыши и баланс считает сервер. Здесь то же самое, но локально и с задержкой сети.
 
-import {
-    BETS, PAYLINES, REEL_COUNT, ROW_COUNT, START_BALANCE, SYMBOLS, WILD, randomSymbol,
-} from '../config/gameConfig';
+import { REEL_COUNT, ROW_COUNT } from '../config/game';
+import { BETS, PAYLINES, START_BALANCE, SYMBOL_MATH, WILD, weightedSymbol } from './math';
 import type { Grid, InitResult, LineWin, RgsClient, SpinResult } from './RgsClient';
 
 export class MockRgs implements RgsClient {
@@ -39,7 +38,7 @@ function delay(ms: number): Promise<void> {
 
 function randomGrid(): Grid {
     return Array.from({ length: REEL_COUNT }, () =>
-        Array.from({ length: ROW_COUNT }, randomSymbol),
+        Array.from({ length: ROW_COUNT }, weightedSymbol),
     );
 }
 
@@ -58,7 +57,7 @@ function evaluate(grid: Grid, lineBet: number): LineWin[] {
         }
         if (count < 3) return;
 
-        const def = SYMBOLS.find((s) => s.id === target)!;
+        const def = SYMBOL_MATH.find((s) => s.id === target)!;
         const amount = def.pays[count - 3]! * lineBet;
         wins.push({
             lineIndex,

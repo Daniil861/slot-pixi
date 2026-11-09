@@ -1,3 +1,4 @@
+import { gsap } from 'gsap';
 import { Application, Assets, type AssetsManifest } from 'pixi.js';
 import { Navigation } from './Navigation';
 
@@ -40,6 +41,12 @@ export class Engine {
         // Navigation создаём только после app.init(): app.ticker (как и renderer, canvas, screen)
         // в v8 появляется внутри init — его создаёт TickerPlugin. До init там undefined.
         this._navigation = new Navigation(this.app.ticker);
+
+        // GSAP по умолчанию крутит свой requestAnimationFrame. Отключаем его и обновляем GSAP
+        // из ticker Pixi: одни часы на анимации и логику (ReelsView.update), твины пересчитываются
+        // в том же кадре до рендера, а остановка ticker (пауза) останавливает и твины.
+        gsap.ticker.remove(gsap.updateRoot);
+        this.app.ticker.add((ticker) => gsap.updateRoot(ticker.lastTime / 1000));
         this.app.stage.addChild(this._navigation.container);
 
         // resizeTo: window меняет размер renderer, renderer генерирует 'resize' — передаём экранам.
