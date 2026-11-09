@@ -1,24 +1,29 @@
-import { Container, type Renderer } from 'pixi.js';
+import { Container, Sprite, type Renderer } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/gameConfig';
-import { fitContain } from '../engine/layout';
+import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 import type { MockRgs } from '../server/MockRgs';
 import { REELS_HEIGHT, REELS_WIDTH, ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
 
 /**
- * Игровой экран. Пока (шаг 1) — перенос прежнего поля из main.ts без изменений.
- * Шаг 2: фон, рамка, подложка. Шаг 3: модель и контроллер вместо клика по полю.
+ * Игровой экран. Два уровня раскладки:
+ * - background — на всё окно (cover): без полос, края обрезаются;
+ * - content — игра в дизайн-координатах 1920×1080 (contain): видна целиком.
+ * Поэтому фон не внутри content: у них разные правила масштабирования.
+ * Шаг 3: модель и контроллер вместо клика по полю.
  */
 export class GameScreen extends Container implements Screen {
     static readonly bundles = ['game'] as const;
 
+    private readonly background = Sprite.from('background');
     private readonly content = new Container();
     private readonly reels: ReelsView;
 
     constructor(renderer: Renderer, private readonly rgs: MockRgs) {
         super();
-        this.addChild(this.content);
+        this.background.anchor.set(0.5);
+        this.addChild(this.background, this.content);
 
         this.reels = new ReelsView(new SymbolTextures(renderer));
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
@@ -35,6 +40,8 @@ export class GameScreen extends Container implements Screen {
     }
 
     resize(width: number, height: number): void {
+        const { width: bgWidth, height: bgHeight } = this.background.texture;
+        fitCover(this.background, width, height, bgWidth, bgHeight);
         fitContain(this.content, width, height, DESIGN_WIDTH, DESIGN_HEIGHT);
     }
 

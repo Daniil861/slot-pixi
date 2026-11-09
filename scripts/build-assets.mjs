@@ -1,8 +1,9 @@
-// Упаковка символов в атлас: art-src/symbols/*.png → public/assets/symbols.{png,json}.
-// Запуск: npm run atlas. Повторять после каждого изменения исходников арта.
+// Сборка ассетов из art-src/ в public/assets/. Запуск: npm run assets — после каждого изменения арта.
+// 1. Символы пакуются в атлас: art-src/symbols/*.png → symbols.{png,json}.
+// 2. Крупные одиночные картинки копируются как есть (в атласе им не место: большие, рисуются по одной).
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { packAsync } from 'free-tex-packer-core';
 
 const SRC = 'art-src/symbols';
@@ -35,4 +36,19 @@ mkdirSync(OUT, { recursive: true });
 for (const file of files) {
     writeFileSync(join(OUT, file.name), file.buffer);
     console.log('written', join(OUT, file.name));
+}
+
+/** Одиночные файлы: путь в art-src → путь в public/assets (его же пишем в манифест). */
+const SINGLE_FILES = [
+    'background/bg_landscape.jpg',
+    'reels/frame.png',
+    'reels/reels_bg.png',
+    'ui/logo.png',
+];
+
+for (const file of SINGLE_FILES) {
+    const target = join(OUT, file);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(join('art-src', file), target);
+    console.log('copied ', target);
 }

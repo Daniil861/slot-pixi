@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "atlas": "node scripts/pack-atlas.mjs"
+    "assets": "node scripts/build-assets.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.22.0"

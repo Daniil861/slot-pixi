@@ -19,6 +19,9 @@ export const manifest: AssetsManifest = {
                 // JSON атласа: загрузчик spritesheet сам подтянет symbols.png из meta.image
                 // и положит каждый кадр в кэш под его именем ('ace', 'king', ...).
                 { alias: 'symbols', src: 'symbols.json' },
+                { alias: 'background', src: 'background/bg_landscape.jpg' },
+                { alias: 'reels_bg', src: 'reels/reels_bg.png' },
+                { alias: 'reels_frame', src: 'reels/frame.png' },
             ],
         },
     ],

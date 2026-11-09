@@ -4,7 +4,7 @@ import { SYMBOLS, type SymbolId } from '../../config/gameConfig';
 const PLACEHOLDER_SIZE = 256;
 
 /**
- * Текстуры символов по id. Если кадра ещё нет в атласе (художник не сдал high1–3 и wild),
+ * Текстуры символов по id. Если кадра нет в атласе (символ добавили в конфиг раньше арта),
  * генерируем заглушку: рисуем Graphics + Text и «запекаем» их в текстуру через renderer.
  * Так остальной код всегда работает с Texture и не знает, настоящая она или нет.
  */
@@ -14,10 +14,12 @@ export class SymbolTextures {
     constructor(renderer: Renderer) {
         for (const { id } of SYMBOLS) {
             // Assets.cache — общий кэш загруженного. Spritesheet кладёт туда каждый кадр по имени.
-            const texture = Assets.cache.has(id)
-                ? Texture.from(id)
-                : createPlaceholder(renderer, id);
-            this.textures.set(id, texture);
+            if (Assets.cache.has(id)) {
+                this.textures.set(id, Texture.from(id));
+            } else {
+                console.warn(`[SymbolTextures] no frame "${id}" in atlas, using placeholder`);
+                this.textures.set(id, createPlaceholder(renderer, id));
+            }
         }
     }
 
