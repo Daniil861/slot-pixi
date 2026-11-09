@@ -9,6 +9,9 @@ import type { SymbolTextures } from './SymbolTextures';
  */
 const STRIP_LENGTH = ROW_COUNT + 2;
 
+/** Скорость вращения, ячеек в секунду (15 × 200 px = 3000 px/с). */
+const SPIN_SPEED = 15;
+
 /**
  * Один барабан — лента из STRIP_LENGTH спрайтов, которые ходят по кругу.
  *
@@ -25,6 +28,7 @@ export class Reel extends Container {
     private readonly sprites: Sprite[] = [];
     /** Не `position`: это имя уже занято у Container (координаты объекта). */
     private offset = 0;
+    private spinning = false;
 
     constructor(private readonly textures: SymbolTextures) {
         super();
@@ -49,6 +53,28 @@ export class Reel extends Container {
         this.layout();
     }
 
+    startSpin(): void {
+        this.spinning = true;
+    }
+
+    /** Остановиться на символах видимых рядов. Пока резко; шаг 3 — замедление и bounce. */
+    stopOn(ids: readonly SymbolId[]): void {
+        this.spinning = false;
+        this.setSymbols(ids);
+    }
+
+    /**
+     * Каждый кадр. deltaMS — реальное время кадра в мс, поэтому скорость не зависит от FPS:
+     * на 60 и на 120 Гц барабан проходит одинаковое расстояние за секунду.
+     * Ticker ограничивает deltaMS сверху 100 мс (minFPS = 10): после лага лента не «прыгнет» на полэкрана.
+     */
+    update(deltaMS: number): void {
+        if (!this.spinning) return;
+        // % STRIP_LENGTH держит число маленьким; на раскладку это не влияет — она и так по модулю.
+        this.offset = (this.offset + (SPIN_SPEED * deltaMS) / 1000) % STRIP_LENGTH;
+        this.layout(true);
+    }
+
     private setSymbol(sprite: Sprite, id: SymbolId): void {
         // Подмена текстуры — дешёвая операция: объект остаётся в дереве (аналог spriteFrame у cc.Sprite).
         sprite.texture = this.textures.get(id);
@@ -56,10 +82,18 @@ export class Reel extends Container {
         sprite.setSize(SYMBOL_SIZE);
     }
 
-    private layout(): void {
+    /** @param refreshWrapped — дать новый случайный символ спрайтам, которые перескочили снизу наверх. */
+    private layout(refreshWrapped = false): void {
         this.sprites.forEach((sprite, i) => {
+            const previousY = sprite.y;
             const slot = (i + this.offset) % STRIP_LENGTH;
             sprite.y = (slot - 1) * CELL_SIZE + CELL_SIZE / 2;
+
+            // Лента едет вниз, поэтому y может уменьшиться только при завороте из нижнего слота в верхний.
+            // В этот момент спрайт скрыт маской — меняем ему символ, и лента выглядит бесконечной.
+            if (refreshWrapped && sprite.y < previousY) {
+                this.setSymbol(sprite, randomSymbol());
+            }
         });
     }
 }

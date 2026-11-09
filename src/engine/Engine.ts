@@ -13,7 +13,13 @@ export interface EngineOptions {
  */
 export class Engine {
     readonly app = new Application();
-    readonly navigation = new Navigation(this.app.ticker);
+    private _navigation: Navigation | undefined;
+
+    /** Доступна после init(). */
+    get navigation(): Navigation {
+        if (!this._navigation) throw new Error('Engine.init() must be awaited before using navigation');
+        return this._navigation;
+    }
 
     async init(options: EngineOptions): Promise<void> {
         // init асинхронный: Pixi выбирает WebGPU или WebGL и поднимает выбранный renderer.
@@ -31,7 +37,10 @@ export class Engine {
         // Assets.init — один раз и до любых загрузок.
         await Assets.init({ manifest: options.manifest, basePath: options.basePath });
 
-        this.app.stage.addChild(this.navigation.container);
+        // Navigation создаём только после app.init(): app.ticker (как и renderer, canvas, screen)
+        // в v8 появляется внутри init — его создаёт TickerPlugin. До init там undefined.
+        this._navigation = new Navigation(this.app.ticker);
+        this.app.stage.addChild(this._navigation.container);
 
         // resizeTo: window меняет размер renderer, renderer генерирует 'resize' — передаём экранам.
         // app.screen — в CSS-пикселях (без учёта resolution), раскладка считается в них.

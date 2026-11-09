@@ -1,4 +1,4 @@
-import { Container, Sprite, Text, type DestroyOptions, type Renderer } from 'pixi.js';
+import { Container, Sprite, Text, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/gameConfig';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
@@ -42,7 +42,7 @@ export class GameScreen extends Container implements Screen {
         this.infoText.position.set(DESIGN_WIDTH / 2, this.reels.y + REELS_HEIGHT + 110);
         this.content.addChild(this.infoText);
 
-        // ReelsView подходит под интерфейс GameView (есть setGrid) — контроллер не знает его класс.
+        // ReelsView подходит под интерфейс GameView — контроллер не знает его класс.
         this.controller = new GameController(model, rgs, this.reels);
 
         // Ввод → контроллер. Временно клик по полю; сессия 3 — кнопка Spin.
@@ -57,6 +57,11 @@ export class GameScreen extends Container implements Screen {
 
     async show(): Promise<void> {
         await this.controller.init();
+    }
+
+    /** Вызывается каждый кадр: Navigation подписал этот метод на app.ticker. */
+    update(ticker: Ticker): void {
+        this.reels.update(ticker.deltaMS);
     }
 
     resize(width: number, height: number): void {
