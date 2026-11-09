@@ -42,7 +42,7 @@ src/
   server/      RgsClient interface, MockRgs
   game/        GameModel, GameController
   screens/     LoadScreen, GameScreen
-  views/       ReelsView, SymbolTextures
+  views/       ReelsView, Reel, SymbolTextures
 art-src/       source art
 scripts/       asset build script
 ```

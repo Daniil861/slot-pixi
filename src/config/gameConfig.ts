@@ -61,3 +61,18 @@ export const PAYLINES: readonly (readonly number[])[] = [
 
 export const BETS: readonly number[] = [10, 20, 50, 100];
 export const START_BALANCE = 1000;
+
+const TOTAL_WEIGHT = SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
+
+/**
+ * Случайный символ с учётом весов. Используют и mock-сервер (результат спина),
+ * и клиент (символы-«шум» на крутящейся ленте), поэтому живёт в общем конфиге.
+ */
+export function randomSymbol(): SymbolId {
+    let r = Math.random() * TOTAL_WEIGHT;
+    for (const s of SYMBOLS) {
+        r -= s.weight;
+        if (r < 0) return s.id;
+    }
+    return SYMBOLS[0]!.id;
+}

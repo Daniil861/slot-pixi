@@ -2,8 +2,7 @@
 // а сетку, выигрыши и баланс считает сервер. Здесь то же самое, но локально и с задержкой сети.
 
 import {
-    BETS, PAYLINES, REEL_COUNT, ROW_COUNT, START_BALANCE, SYMBOLS, WILD,
-    type SymbolId,
+    BETS, PAYLINES, REEL_COUNT, ROW_COUNT, START_BALANCE, SYMBOLS, WILD, randomSymbol,
 } from '../config/gameConfig';
 import type { Grid, InitResult, LineWin, RgsClient, SpinResult } from './RgsClient';
 
@@ -36,18 +35,6 @@ export class MockRgs implements RgsClient {
 
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const TOTAL_WEIGHT = SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
-
-/** Случайный символ с учетом весов. Также пригодится клиенту для «шума» на крутящейся ленте. */
-export function randomSymbol(): SymbolId {
-    let r = Math.random() * TOTAL_WEIGHT;
-    for (const s of SYMBOLS) {
-        r -= s.weight;
-        if (r < 0) return s.id;
-    }
-    return SYMBOLS[0]!.id;
 }
 
 function randomGrid(): Grid {
