@@ -21,6 +21,8 @@ export class ReelsView extends Container {
     private spinTime = 0;
     /** Запрошенная остановка: ждёт, пока пройдёт minSpinSec. */
     private pendingStop: { grid: Grid; resolve: () => void } | undefined;
+    /** Quick stop нажат до того, как пришёл результат: остановимся сразу, как только он придёт. */
+    private quickStopRequested = false;
 
     constructor(
         textures: SymbolTextures,
@@ -65,7 +67,17 @@ export class ReelsView extends Container {
 
     startSpin(): void {
         this.spinTime = 0;
+        this.quickStopRequested = false;
         this.reels.forEach((reel) => reel.startSpin());
+    }
+
+    /**
+     * Quick stop по повторному нажатию. Если результата ещё нет — запоминаем и не ждём minSpinSec.
+     * Если барабаны уже получили результат — каждый останавливается сразу (см. Reel.quickStop).
+     */
+    quickStop(): void {
+        this.quickStopRequested = true;
+        this.reels.forEach((reel) => reel.quickStop());
     }
 
     /**
@@ -82,13 +94,18 @@ export class ReelsView extends Container {
         this.spinTime += deltaMS / 1000;
         this.reels.forEach((reel) => reel.update(deltaMS));
 
-        if (this.pendingStop && this.spinTime >= this.timing.minSpinSec) {
+        const canStop = this.spinTime >= this.timing.minSpinSec || this.quickStopRequested;
+        if (this.pendingStop && canStop) {
             const { grid, resolve } = this.pendingStop;
             this.pendingStop = undefined;
             // Каждый следующий барабан начинает тормозить на reelStopDelaySec позже.
             // Promise.all — промис stopOn завершится, когда встанет последний (правый) барабан.
             const stops = grid.map((column, i) => this.reels[i]!.stopOn(column, i * this.timing.reelStopDelaySec));
             void Promise.all(stops).then(() => resolve());
+            // Quick stop был нажат раньше результата — все барабаны встают сразу, без очереди.
+            if (this.quickStopRequested) {
+                this.reels.forEach((reel) => reel.quickStop());
+            }
         }
     }
 }

@@ -37,6 +37,12 @@ export class Reel extends Container {
     private offset = 0;
     private spinning = false;
     private landing: Landing | undefined;
+    /** Запрошенная остановка: символы результата и кого уведомить, когда барабан встанет. */
+    private stopRequest: { ids: readonly SymbolId[]; resolve: () => void } | undefined;
+    /** Отложенный старт торможения (очередь слева направо). */
+    private stopCall: gsap.core.Tween | undefined;
+    /** Идущее торможение — нужно, чтобы ускорить его при quick stop. */
+    private landingTimeline: gsap.core.Timeline | undefined;
 
     constructor(
         private readonly textures: SymbolTextures,
@@ -77,9 +83,30 @@ export class Reel extends Container {
      */
     stopOn(ids: readonly SymbolId[], delaySec = 0): Promise<void> {
         return new Promise((resolve) => {
+            this.stopRequest = { ids, resolve };
             // delayedCall тоже идёт по часам GSAP, а они привязаны к ticker Pixi (см. Engine).
-            gsap.delayedCall(delaySec, () => this.land(ids, resolve));
+            this.stopCall = gsap.delayedCall(delaySec, () => this.land());
         });
+    }
+
+    /**
+     * Quick stop — по повторному нажатию. Работает, только если результат уже известен (был stopOn):
+     * - барабан ещё крутится или ждёт своей очереди → жёсткая остановка (slam);
+     * - барабан уже тормозит → ускоряем торможение, чтобы уложиться в quickStopSec.
+     */
+    quickStop(): void {
+        if (!this.stopRequest) return;
+
+        if (this.landingTimeline) {
+            const remaining = this.landingTimeline.duration() - this.landingTimeline.time();
+            // timeScale > 1 — таймлайн проигрывается быстрее; кривая та же, просто сжата по времени.
+            this.landingTimeline.timeScale(Math.max(1, remaining / this.timing.quickStopSec));
+            return;
+        }
+
+        this.stopCall?.kill();
+        this.stopCall = undefined;
+        this.slam();
     }
 
     /**
@@ -96,39 +123,72 @@ export class Reel extends Container {
 
     /** Твины держат ссылку на объект: без kill они доиграют и будут трогать уничтоженные спрайты. */
     override destroy(options?: DestroyOptions): void {
+        // killTweensOf(this) не снимает delayedCall: у него цель — функция, а не барабан.
+        this.stopCall?.kill();
+        this.landingTimeline?.kill();
         gsap.killTweensOf(this);
         super.destroy(options);
     }
 
-    private land(ids: readonly SymbolId[], onLanded: () => void): void {
+    /** Обычная остановка: торможение с проездом и возвратом, символы результата — при последнем завороте. */
+    private land(): void {
+        const request = this.stopRequest;
+        if (!request) return;
+        this.stopCall = undefined;
         this.spinning = false;
+
         const { spinSpeed, bounceCells, bounceBackSec } = this.timing;
         // Ближайшая целая позиция + запас. Целое число = символы ровно в ячейках.
         // Запас не меньше длины ленты: тогда каждый спрайт за торможение хотя бы раз заворачивает наверх
         // и успевает получить символ результата (защита от слишком маленького stopCells в конфиге).
         const stopCells = Math.max(this.timing.stopCells, STRIP_LENGTH);
         const target = Math.ceil(this.offset) + stopCells;
-        this.landing = { target, ids };
+        this.landing = { target, ids: request.ids };
 
         const overshoot = target + bounceCells;
         // power1.out (1 − (1 − t)²) стартует со скоростью 2 · distance / duration. Подбираем duration так,
         // чтобы стартовая скорость равнялась скорости вращения: торможение начинается без рывка.
         const duration = (2 * (overshoot - this.offset)) / spinSpeed;
 
-        gsap.timeline({
-            onUpdate: () => this.layout(true),
-            onComplete: () => {
-                // Нормализуем: та же раскладка, но маленькое число.
-                this.offset = target % STRIP_LENGTH;
-                this.landing = undefined;
-                this.layout();
-                onLanded();
-            },
-        })
+        this.landingTimeline = gsap
+            .timeline({ onUpdate: () => this.layout(true), onComplete: () => this.finishLanding(target) })
             // Торможение с проездом за цель...
             .to(this, { offset: overshoot, duration, ease: 'power1.out' })
             // ...и возврат назад — bounce.
             .to(this, { offset: target, duration: bounceBackSec, ease: 'power1.inOut' });
+    }
+
+    /**
+     * Жёсткая остановка (slam stop): сразу ставим символы результата, сдвигаем ленту на ячейку вверх
+     * и коротко «доезжаем» в ячейки с bounce. На скорости вращения подмену символов глаз не замечает.
+     */
+    private slam(): void {
+        const request = this.stopRequest;
+        if (!request) return;
+        this.spinning = false;
+        this.landing = undefined;
+
+        this.setSymbols(request.ids);
+        this.offset = -1;
+        this.layout();
+
+        const { bounceCells, bounceBackSec, quickStopSec } = this.timing;
+        this.landingTimeline = gsap
+            .timeline({ onUpdate: () => this.layout(true), onComplete: () => this.finishLanding(0) })
+            .to(this, { offset: bounceCells, duration: quickStopSec, ease: 'power1.out' })
+            .to(this, { offset: 0, duration: bounceBackSec, ease: 'power1.inOut' });
+    }
+
+    private finishLanding(target: number): void {
+        // Нормализуем: та же раскладка, но маленькое неотрицательное число.
+        this.offset = mod(target, STRIP_LENGTH);
+        this.landing = undefined;
+        this.landingTimeline = undefined;
+        this.layout();
+
+        const request = this.stopRequest;
+        this.stopRequest = undefined;
+        request?.resolve();
     }
 
     private setSymbol(sprite: Sprite, id: SymbolId): void {
@@ -142,7 +202,8 @@ export class Reel extends Container {
     private layout(refreshWrapped = false): void {
         this.sprites.forEach((sprite, i) => {
             const previousY = sprite.y;
-            const slot = (i + this.offset) % STRIP_LENGTH;
+            // mod, а не %: при slam offset бывает отрицательным, а % в JS сохраняет знак (-1 % 5 = -1).
+            const slot = mod(i + this.offset, STRIP_LENGTH);
             sprite.y = (slot - 1) * CELL_SIZE + CELL_SIZE / 2;
 
             // Заворот снизу наверх — скачок y вверх почти на всю ленту. Небольшое уменьшение y
@@ -172,4 +233,9 @@ export class Reel extends Container {
 /** Видимые слоты 1..ROW_COUNT — символы результата, скрытые крайние — случайные. */
 function symbolForSlot(slot: number, ids: readonly SymbolId[]): SymbolId {
     return ids[slot - 1] ?? randomSymbolId();
+}
+
+/** Остаток от деления, всегда неотрицательный. */
+function mod(value: number, divisor: number): number {
+    return ((value % divisor) + divisor) % divisor;
 }

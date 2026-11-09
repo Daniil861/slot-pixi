@@ -52,7 +52,7 @@ scripts/       asset build script
 
 - [x] Asset loading with bundles and a symbol atlas, loading screen
 - [x] Screen navigation, game model, controller, mock RGS
-- [x] Reel spin animation: mask, ticker-driven strip, staggered stop on the server grid with bounce (GSAP)
+- [x] Reel spin animation: mask, ticker-driven strip, staggered stop on the server grid with bounce (GSAP), quick stop, turbo preset
 - [ ] Spin button, balance/win panel, win lines and highlights
 - [ ] Spine animations, sound
 - [ ] Responsive layout (portrait/landscape)

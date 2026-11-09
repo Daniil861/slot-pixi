@@ -1,7 +1,10 @@
 import EventEmitter from 'eventemitter3';
 
-/** Состояния игры. Stopping и ShowWins появятся вместе с анимацией барабанов и показом выигрышей. */
-export type GameState = 'idle' | 'spinning';
+/**
+ * Состояния игры: idle → spinning (ждём сервер, барабаны крутятся) → stopping (результат есть,
+ * барабаны садятся) → idle. ShowWins появится вместе с показом выигрышей (сессия 3).
+ */
+export type GameState = 'idle' | 'spinning' | 'stopping';
 
 /** События модели: имя → аргументы. eventemitter3 проверяет их типы в on/emit. */
 interface GameModelEvents {

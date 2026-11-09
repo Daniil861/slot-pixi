@@ -49,7 +49,7 @@ export class GameScreen extends Container implements Screen {
         // Ввод → контроллер. Временно клик по полю; сессия 3 — кнопка Spin.
         this.reels.eventMode = 'static';
         this.reels.cursor = 'pointer';
-        this.reels.on('pointertap', () => void this.controller.spin());
+        this.reels.on('pointertap', () => this.controller.pressSpin());
 
         // Временно: T — переключить turbo. Сессия 3 — кнопка в UI.
         window.addEventListener('keydown', this.onKeyDown);

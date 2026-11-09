@@ -13,6 +13,8 @@ export interface GameView {
     startSpin(): void;
     /** Остановить вращение на сетке. Промис завершается, когда барабаны встали. */
     stopOn(grid: Grid): Promise<void>;
+    /** Остановить как можно быстрее (повторное нажатие во время вращения). */
+    quickStop(): void;
 }
 
 /**
@@ -38,6 +40,18 @@ export class GameController {
         this.view.setGrid(result.grid);
     }
 
+    /**
+     * Нажатие кнопки спина (сейчас — клик по полю). Одна кнопка, смысл зависит от состояния:
+     * idle — новый спин; spinning / stopping — quick stop.
+     */
+    pressSpin(): void {
+        if (this.model.state === 'idle') {
+            void this.spin();
+        } else {
+            this.view.quickStop();
+        }
+    }
+
     async spin(): Promise<void> {
         // Защита от двойного клика и ставки больше баланса: проверка в одном месте, а не в кнопке.
         if (!this.model.canSpin) return;
@@ -52,6 +66,9 @@ export class GameController {
         try {
             const result = await this.rgs.spin(bet);
             this.lastGrid = result.grid;
+            // Результат есть, барабаны садятся. Отдельное состояние: UI может, например,
+            // показать кнопку Stop как неактивную, а логика — не принимать новую ставку.
+            this.model.state = 'stopping';
             await this.view.stopOn(result.grid);
             // Итоговый баланс берём с сервера, а не считаем сами: сервер — источник правды.
             // Сессия 3: сначала показ выигрыша и счётчик, потом баланс.
