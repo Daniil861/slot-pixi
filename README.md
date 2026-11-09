@@ -47,8 +47,6 @@ art-src/       source art
 scripts/       asset build script
 ```
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (in Russian).
-
 ## Roadmap
 
 - [x] Asset loading with bundles and a symbol atlas, loading screen
