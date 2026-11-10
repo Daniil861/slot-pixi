@@ -49,6 +49,12 @@ export class Engine {
         this.app.ticker.add((ticker) => gsap.updateRoot(ticker.lastTime / 1000));
         this.app.stage.addChild(this._navigation.container);
 
+        // PixiJS DevTools (расширение браузера) находит приложение через этот глобальный объект:
+        // дерево сцены, свойства объектов, текстуры. Только в dev: в production-сборке Vite вырежет блок.
+        if (import.meta.env.DEV) {
+            (globalThis as { __PIXI_DEVTOOLS__?: unknown }).__PIXI_DEVTOOLS__ = { app: this.app };
+        }
+
         // resizeTo: window меняет размер renderer, renderer генерирует 'resize' — передаём экранам.
         // app.screen — в CSS-пикселях (без учёта resolution), раскладка считается в них.
         this.app.renderer.on('resize', (width, height) => this.navigation.resize(width, height));
