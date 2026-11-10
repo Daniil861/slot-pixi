@@ -19,6 +19,7 @@ import {
     NORMAL_WINS_TIMING,
     SYMBOL_HIGHLIGHT_STYLE,
     TURBO_WINS_TIMING,
+    WIN_BACKDROP_STYLE,
     WIN_LINES_STYLE,
 } from '../config/wins';
 import { fitContain, fitCover } from '../engine/layout';
@@ -31,6 +32,7 @@ import { SymbolTextures } from '../views/reels/SymbolTextures';
 import { Button } from '../views/ui/Button';
 import { installBitmapFont } from '../views/ui/fonts';
 import { ValueField } from '../views/ui/ValueField';
+import { WinBackdrop } from '../views/wins/WinBackdrop';
 import { WinLinesView } from '../views/wins/WinLinesView';
 import { WinPresenter } from '../views/wins/WinPresenter';
 import { WinSymbolsView } from '../views/wins/WinSymbolsView';
@@ -80,7 +82,9 @@ export class GameScreen extends Container implements Screen {
         this.winSymbols.position.copyFrom(this.reels.position);
         this.winLines.position.copyFrom(this.reels.position);
         this.content.addChild(this.winSymbols, this.winLines);
-        this.winPresenter = new WinPresenter(this.reels, this.winLines, this.winSymbols, this.currentWinsTiming());
+        // Затемняется только фон окна: поле, панель и кнопки остаются как есть.
+        const backdrop = new WinBackdrop(this.background, WIN_BACKDROP_STYLE);
+        this.winPresenter = new WinPresenter(this.reels, this.winLines, this.winSymbols, backdrop, this.currentWinsTiming());
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
         // из стиля BitmapText, а системного шрифта с таким именем нет — получится шрифт по умолчанию.

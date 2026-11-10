@@ -2,6 +2,7 @@ import { gsap } from 'gsap';
 import type { WinsTiming } from '../../config/wins';
 import type { LineWin } from '../../server/RgsClient';
 import type { ReelsView } from '../reels/ReelsView';
+import type { WinBackdrop } from './WinBackdrop';
 import type { WinLinesView } from './WinLinesView';
 import type { WinCell, WinSymbolsView } from './WinSymbolsView';
 
@@ -11,7 +12,7 @@ type Position = readonly [reel: number, row: number];
 type ShowMode = 'none' | 'all' | 'cycle';
 
 /**
- * Показ выигрыша: линии + Spine-анимация выигрышных символов + затемнение остальных.
+ * Показ выигрыша: линии + Spine-анимация выигрышных символов + затемнение остальных символов и фона.
  * Правил игры не знает — всё берёт из LineWin.
  *
  * Два режима, как в большинстве слотов:
@@ -32,6 +33,7 @@ export class WinPresenter {
         private readonly reels: ReelsView,
         private readonly lines: WinLinesView,
         private readonly symbols: WinSymbolsView,
+        private readonly backdrop: WinBackdrop,
         private timing: WinsTiming,
     ) {
         this.symbols.onImpact = () => {
@@ -47,6 +49,7 @@ export class WinPresenter {
     showAll(wins: readonly LineWin[]): void {
         this.stopCycle();
         this.mode = 'all';
+        this.backdrop.show();
         this.lines.show(wins.map((w) => w.lineIndex), this.timing.lineDrawSec);
         // Ячейка может входить в несколько линий — анимируем её один раз.
         this.highlight(uniquePositions(wins.flatMap((w) => w.positions)));
@@ -71,6 +74,7 @@ export class WinPresenter {
     clear(): void {
         this.stopCycle();
         this.mode = 'none';
+        this.backdrop.hide();
         this.lines.hide();
         this.symbols.hide();
         this.reels.clearHighlight();
@@ -78,6 +82,7 @@ export class WinPresenter {
 
     destroy(): void {
         this.stopCycle();
+        this.backdrop.destroy();
     }
 
     /** Спрайты в ячейках скрыть и затемнить остальные, в ячейках — Spine с символом из сетки. */

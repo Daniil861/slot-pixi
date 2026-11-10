@@ -57,3 +57,31 @@ export const WIN_LINES_STYLE = Object.freeze({
     shadowColor: 0x000000,
     shadowAlpha: 0.5,
 } satisfies WinLinesStyle);
+
+/**
+ * Фон на время показа выигрыша: темнее, менее насыщенный и размытый — внимание на поле.
+ * Фильтры каждый кадр перерисовывают объект в отдельную текстуру, поэтому вне показа они снимаются совсем.
+ */
+export interface WinBackdropStyle {
+    /** Яркость на пике: 1 — без изменений, 0 — чёрный. */
+    readonly brightness: number;
+    /** Насыщенность: 0 — без изменений, -1 — ч/б. */
+    readonly saturation: number;
+    /** Сила размытия (BlurFilter.strength). 0 — без blur. */
+    readonly blur: number;
+    /** Число проходов blur: больше — мягче, но дороже. */
+    readonly blurQuality: number;
+    /** Разрешение, в котором считается blur: меньше 1 — дешевле, на размытой картинке потеря не видна. */
+    readonly blurResolution: number;
+    /** Появление и исчезновение. */
+    readonly fadeSec: number;
+}
+
+export const WIN_BACKDROP_STYLE = Object.freeze({
+    brightness: 0.55,
+    saturation: -0.4,
+    blur: 6,
+    blurQuality: 3,
+    blurResolution: 0.5,
+    fadeSec: 0.3,
+} satisfies WinBackdropStyle);
