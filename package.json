@@ -10,6 +10,7 @@
     "assets": "node scripts/build-assets.mjs"
   },
   "dependencies": {
+    "@esotericsoftware/spine-pixi-v8": "^4.3.13",
     "eventemitter3": "^5.0.4",
     "gsap": "^3.15.1",
     "pixi.js": "^8.22.0"

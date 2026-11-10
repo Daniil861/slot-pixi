@@ -1,0 +1,22 @@
+symbols.png
+size: 1024,1024
+filter: Linear,Linear
+pma: false
+10
+bounds: 3,3,256,256
+ace
+bounds: 3,265,256,256
+high1
+bounds: 3,527,256,256
+high2
+bounds: 265,3,256,256
+high3
+bounds: 527,3,256,256
+j
+bounds: 265,265,256,256
+king
+bounds: 265,527,256,256
+queen
+bounds: 527,265,256,256
+wild
+bounds: 527,527,256,256

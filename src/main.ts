@@ -1,4 +1,7 @@
 // Точка входа: только сборка зависимостей и порядок экранов. Логики здесь нет.
+// Импорт ради побочного эффекта: пакет регистрирует в Assets загрузчики .atlas и скелетов Spine
+// (extensions.add). Должен выполниться до загрузки бандла с этими файлами.
+import '@esotericsoftware/spine-pixi-v8';
 import { manifest } from './config/manifest';
 import { Engine } from './engine/Engine';
 import { GameModel } from './game/GameModel';

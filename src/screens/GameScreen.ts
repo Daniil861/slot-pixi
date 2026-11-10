@@ -9,8 +9,10 @@ import {
     PANEL_GAP,
     REELS_HEIGHT,
     REELS_WIDTH,
+    SYMBOL_SIZE,
 } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
+import { SYMBOL_SPINE } from '../config/spine';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON, SYMBOL_PLACEHOLDER, UI_FONT, VALUE_FIELD, WIN_FIELD } from '../config/ui';
 import { NORMAL_WINS_TIMING, SYMBOL_HIGHLIGHT_STYLE, TURBO_WINS_TIMING, WIN_LINES_STYLE } from '../config/wins';
 import { fitContain, fitCover } from '../engine/layout';
@@ -20,6 +22,7 @@ import type { GameModel, GameState } from '../game/GameModel';
 import type { LineWin, RgsClient } from '../server/RgsClient';
 import { ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
+import { SymbolSpine } from '../views/spine/SymbolSpine';
 import { Button } from '../views/ui/Button';
 import { installBitmapFont } from '../views/ui/fonts';
 import { ValueField } from '../views/ui/ValueField';
@@ -43,6 +46,8 @@ export class GameScreen extends Container implements Screen {
     private readonly winLines = new WinLinesView(WIN_LINES_STYLE);
     private readonly winPresenter: WinPresenter;
     private readonly controller: GameController;
+    /** Временно (сессия 4, шаг 1): проверка Spine — wild слева от поля, win на каждом выигрыше. В шаге 2 Spine переедет на выигрышные ячейки. */
+    private readonly spinePreview = new SymbolSpine(SYMBOL_SPINE, SYMBOL_SIZE);
     private readonly spinButton = new Button(PRIMARY_BUTTON, 'SPIN');
     private readonly turboButton = new Button(SECONDARY_BUTTON, 'TURBO');
     private readonly betButton = new Button(SECONDARY_BUTTON, 'BET');
@@ -67,6 +72,13 @@ export class GameScreen extends Container implements Screen {
         this.winLines.position.copyFrom(this.reels.position);
         this.content.addChild(this.winLines);
         this.winPresenter = new WinPresenter(this.reels, this.winLines, this.currentWinsTiming());
+
+        // Временно: превью Spine по центру полосы слева от рамки, на высоте среднего ряда.
+        this.spinePreview.setSymbol('wild');
+        this.spinePreview.playIdle();
+        this.spinePreview.position.set((this.reels.x - FRAME_BORDER) / 2, DESIGN_HEIGHT / 2);
+        this.spinePreview.onImpact = () => console.log('[Spine] impact');
+        this.content.addChild(this.spinePreview);
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
         // из стиля BitmapText, а системного шрифта с таким именем нет — получится шрифт по умолчанию.
@@ -125,6 +137,7 @@ export class GameScreen extends Container implements Screen {
     /** Вызывается каждый кадр: Navigation подписал этот метод на app.ticker. */
     update(ticker: Ticker): void {
         this.reels.update(ticker.deltaMS);
+        this.spinePreview.update(ticker.deltaMS / 1000);
     }
 
     resize(width: number, height: number): void {
@@ -201,6 +214,7 @@ export class GameScreen extends Container implements Screen {
     private async showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
         this.winsSkipped = false;
         this.winPresenter.showAll(wins);
+        void this.spinePreview.playWin();
         try {
             await this.playWinCounter(totalWin);
         } finally {

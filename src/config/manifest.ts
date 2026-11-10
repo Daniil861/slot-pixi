@@ -1,4 +1,5 @@
 import type { AssetsManifest } from 'pixi.js';
+import { SYMBOL_SPINE } from './spine';
 
 /**
  * Манифест ассетов — аналог набора Asset Bundle в Cocos: описывает, ЧТО грузить и какими группами.
@@ -22,6 +23,11 @@ export const manifest: AssetsManifest = {
                 { alias: 'background', src: 'background/bg_landscape.jpg' },
                 { alias: 'reels_bg', src: 'reels/reels_bg.png' },
                 { alias: 'reels_frame', src: 'reels/frame.png' },
+                // Spine: атлас ссылается на тот же symbols.png (страница атласа), отдельной текстуры нет.
+                // Загрузчик .atlas сам грузит картинку страницы рядом с файлом атласа.
+                { alias: SYMBOL_SPINE.atlasAlias, src: 'symbols.atlas' },
+                // JSON-скелет: загрузчик Spine узнаёт его по полю bones (спрайтшит — по frames/meta).
+                { alias: SYMBOL_SPINE.skeletonAlias, src: 'spine/symbol.json' },
             ],
         },
     ],

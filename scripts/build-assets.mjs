@@ -5,6 +5,7 @@
 import { copyFileSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { packAsync } from 'free-tex-packer-core';
+import { buildAtlas, buildSymbolSkeleton } from './spine/symbolSpine.mjs';
 
 const SRC = 'art-src/symbols';
 const OUT = 'public/assets';
@@ -37,6 +38,18 @@ for (const file of files) {
     writeFileSync(join(OUT, file.name), file.buffer);
     console.log('written', join(OUT, file.name));
 }
+
+// 3. Spine: .atlas поверх symbols.png и скелет символов (скин на каждый символ). См. scripts/spine/symbolSpine.mjs.
+const sheetFile = files.find((f) => f.name.endsWith('.json'));
+const sheet = JSON.parse(sheetFile.buffer.toString('utf-8'));
+const symbolIds = Object.keys(sheet.frames);
+const frameSize = sheet.frames[symbolIds[0]].frame.w;
+
+writeFileSync(join(OUT, 'symbols.atlas'), buildAtlas(sheet));
+console.log('written', join(OUT, 'symbols.atlas'));
+mkdirSync(join(OUT, 'spine'), { recursive: true });
+writeFileSync(join(OUT, 'spine/symbol.json'), JSON.stringify(buildSymbolSkeleton(symbolIds, frameSize), null, 2));
+console.log('written', join(OUT, 'spine/symbol.json'));
 
 /** Одиночные файлы: путь в art-src → путь в public/assets (его же пишем в манифест). */
 const SINGLE_FILES = [
