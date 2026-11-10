@@ -1,7 +1,7 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, LOADING_BAR_Y, LOGO_Y } from '../config/layout';
+import { LOAD_LAYOUTS, type LoadLayout } from '../config/layout';
 import { LOADING_BAR } from '../config/ui';
-import { fitContain } from '../engine/layout';
+import { fitContain, pickLayout } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 
 /** Скругление на всю высоту — «таблетка». Следует из формы, а не настройка. */
@@ -12,8 +12,11 @@ export class LoadScreen extends Container implements Screen {
     /** Бандлы, которые должны быть загружены до создания экрана. */
     static readonly bundles = ['loading'] as const;
 
-    /** Всё содержимое в дизайн-координатах 1920×1080; масштабируется целиком в resize. */
+    /** Всё содержимое в дизайн-координатах раскладки (ландшафт или портрет); масштабируется целиком в resize. */
     private readonly content = new Container();
+    private readonly logo: Sprite;
+    private readonly bar = new Container();
+    private layout: LoadLayout | undefined;
     private readonly fill = new Graphics();
     private readonly percentText = new Text({
         text: '0%',
@@ -25,10 +28,9 @@ export class LoadScreen extends Container implements Screen {
         this.addChild(this.content);
 
         // Логотип уже в кэше: бандл 'loading' загружен до вызова конструктора.
-        const logo = Sprite.from('logo');
-        logo.anchor.set(0.5);
-        logo.position.set(DESIGN_WIDTH / 2, LOGO_Y);
-        this.content.addChild(logo);
+        this.logo = Sprite.from('logo');
+        this.logo.anchor.set(0.5);
+        this.content.addChild(this.logo);
 
         const { width, height } = LOADING_BAR;
         const track = new Graphics()
@@ -36,15 +38,13 @@ export class LoadScreen extends Container implements Screen {
             .fill({ color: LOADING_BAR.trackColor, alpha: LOADING_BAR.trackAlpha })
             .stroke({ width: LOADING_BAR.strokeWidth, color: LOADING_BAR.color });
 
-        const bar = new Container();
-        bar.position.set((DESIGN_WIDTH - width) / 2, LOADING_BAR_Y);
-        bar.addChild(track, this.fill);
+        this.bar.addChild(track, this.fill);
 
         this.percentText.anchor.set(0.5, 0);
         this.percentText.position.set(width / 2, height + LOADING_BAR.percentGap);
-        bar.addChild(this.percentText);
+        this.bar.addChild(this.percentText);
 
-        this.content.addChild(bar);
+        this.content.addChild(this.bar);
         this.onLoad(0);
     }
 
@@ -64,6 +64,12 @@ export class LoadScreen extends Container implements Screen {
     }
 
     resize(width: number, height: number): void {
-        fitContain(this.content, width, height, DESIGN_WIDTH, DESIGN_HEIGHT);
+        const layout = pickLayout(LOAD_LAYOUTS, width, height);
+        if (layout !== this.layout) {
+            this.layout = layout;
+            this.logo.position.copyFrom(layout.logo);
+            this.bar.position.set((layout.designWidth - LOADING_BAR.width) / 2, layout.barY);
+        }
+        fitContain(this.content, width, height, layout.designWidth, layout.designHeight);
     }
 }

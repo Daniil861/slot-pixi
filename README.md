@@ -31,7 +31,7 @@ main.ts ─► Engine (Application, Assets, Navigation)
 - **Logic is Pixi-free:** `game/` (model, controller) and `server/` (RGS contract and mock) don't import `pixi.js`.
 - **Server is the source of truth:** the client deducts the bet immediately, then takes the final balance from the spin response.
 - **Configs by owner:** game math lives on the server side (`server/math.ts`); the client keeps only the grid shape, layout and reel timing. Timing presets (normal / turbo) are injected into the reels, so turbo is just another preset — press `T` to toggle.
-- **Layout:** 1920×1080 design resolution; the background covers the window, the game content is fitted inside it (contain).
+- **Layout:** two layouts — landscape 1920×1080 and portrait 1240×2200; on every resize the one that fits larger is chosen and elements are repositioned. The background covers the window, the game content is fitted inside it (contain).
 
 ## Project structure
 

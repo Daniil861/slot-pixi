@@ -32,3 +32,17 @@ export function fitCover(
     content.scale.set(scale);
     content.position.set(width / 2, height / 2);
 }
+
+/**
+ * Из нескольких дизайн-областей (ландшафт, портрет) выбрать ту, что в окне width×height получится крупнее
+ * при contain. Надёжнее, чем сравнить width и height: для почти квадратного окна выбор тоже правильный.
+ * Аналог отдельного Canvas/префаба под ориентацию в Cocos, но выбор — каждым resize.
+ */
+export function pickLayout<T extends { designWidth: number; designHeight: number }>(
+    layouts: readonly T[],
+    width: number,
+    height: number,
+): T {
+    const scaleOf = (l: T) => Math.min(width / l.designWidth, height / l.designHeight);
+    return layouts.reduce((best, l) => (scaleOf(l) > scaleOf(best) ? l : best));
+}

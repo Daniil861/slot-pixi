@@ -2,16 +2,7 @@ import { gsap } from 'gsap';
 import { Assets, Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
 import { GameAudio } from '../audio/GameAudio';
 import { AUDIO } from '../config/audio';
-import {
-    BUTTON_COLUMN_Y,
-    DESIGN_HEIGHT,
-    DESIGN_WIDTH,
-    FRAME_BORDER,
-    PANEL_FIELD_X,
-    PANEL_GAP,
-    REELS_HEIGHT,
-    REELS_WIDTH,
-} from '../config/layout';
+import { GAME_LAYOUTS, type GameLayout } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { SYMBOL_SPINE } from '../config/spine';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON, SYMBOL_PLACEHOLDER, UI_FONT, VALUE_FIELD, WIN_FIELD } from '../config/ui';
@@ -22,7 +13,7 @@ import {
     WIN_BACKDROP_STYLE,
     WIN_LINES_STYLE,
 } from '../config/wins';
-import { fitContain, fitCover } from '../engine/layout';
+import { fitContain, fitCover, pickLayout } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 import { GameController, type GameView } from '../game/GameController';
 import type { GameModel, GameState } from '../game/GameModel';
@@ -43,7 +34,11 @@ import { WinSymbolsView } from '../views/wins/WinSymbolsView';
  *
  * Два уровня раскладки:
  * - background — на всё окно (cover): без полос, края обрезаются;
- * - content — игра в дизайн-координатах 1920×1080 (contain): видна целиком.
+ * - content — игра в дизайн-координатах раскладки (contain): видна целиком.
+ *
+ * Раскладок две (config/layout.ts): ландшафт 1920×1080 и портрет 1240×2200. В resize выбирается та,
+ * где игра крупнее; при смене раскладки элементы переставляются (applyLayout). Объекты не пересоздаются —
+ * меняются только position, поэтому смена ориентации посреди спина ничего не ломает.
  */
 export class GameScreen extends Container implements Screen {
     static readonly bundles = ['game'] as const;
@@ -68,6 +63,7 @@ export class GameScreen extends Container implements Screen {
     private winHold: gsap.core.Tween | undefined;
     private finishWinHold: (() => void) | undefined;
     private winsSkipped = false;
+    private layout: GameLayout | undefined;
 
     constructor(renderer: Renderer, private readonly model: GameModel, rgs: RgsClient) {
         super();
@@ -75,12 +71,9 @@ export class GameScreen extends Container implements Screen {
         this.addChild(this.background, this.content);
 
         this.reels = new ReelsView(new SymbolTextures(renderer, SYMBOL_PLACEHOLDER), this.currentTiming(), SYMBOL_HIGHLIGHT_STYLE);
-        this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
         // Поверх барабанов и рамки (порядок addChild), в координатах окна барабанов:
-        // Spine выигрышных символов, над ними — линии.
-        this.winSymbols.position.copyFrom(this.reels.position);
-        this.winLines.position.copyFrom(this.reels.position);
+        // Spine выигрышных символов, над ними — линии. Позиции — в applyLayout.
         this.content.addChild(this.winSymbols, this.winLines);
         // Затемняется только фон окна: поле, панель и кнопки остаются как есть.
         const backdrop = new WinBackdrop(this.background, WIN_BACKDROP_STYLE);
@@ -92,11 +85,6 @@ export class GameScreen extends Container implements Screen {
         this.balanceField = new ValueField(VALUE_FIELD, 'BALANCE');
         this.winField = new ValueField(WIN_FIELD, 'WIN');
         this.betField = new ValueField(VALUE_FIELD, 'BET');
-        // Панель под рамкой: баланс слева, выигрыш по центру, ставка справа.
-        const panelY = this.reels.y + REELS_HEIGHT + FRAME_BORDER + PANEL_GAP;
-        this.balanceField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.balance, panelY);
-        this.winField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.win, panelY);
-        this.betField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.bet, panelY);
         this.content.addChild(this.balanceField, this.winField, this.betField);
 
         // GameView собирается из нескольких view: контроллер не знает, кто что показывает.
@@ -118,12 +106,6 @@ export class GameScreen extends Container implements Screen {
         };
         this.controller = new GameController(model, rgs, view);
 
-        // Кнопки справа от поля, по центру свободной полосы между рамкой и краем дизайн-области.
-        const columnX = (this.reels.x + REELS_WIDTH + FRAME_BORDER + DESIGN_WIDTH) / 2;
-        this.spinButton.position.set(columnX, BUTTON_COLUMN_Y.spin);
-        this.turboButton.position.set(columnX, BUTTON_COLUMN_Y.turbo);
-        this.betButton.position.set(columnX, BUTTON_COLUMN_Y.bet);
-        this.soundButton.position.set(columnX, BUTTON_COLUMN_Y.sound);
         this.content.addChild(this.spinButton, this.turboButton, this.betButton, this.soundButton);
 
         // Ввод → контроллер / модель. Кнопка не решает, можно ли крутить: это проверяет контроллер.
@@ -164,10 +146,33 @@ export class GameScreen extends Container implements Screen {
         this.winSymbols.update(ticker.deltaMS / 1000);
     }
 
+    /**
+     * Navigation вызывает при показе экрана и на каждый resize renderer (окно, поворот телефона).
+     * width/height — в CSS-пикселях (app.screen), без resolution.
+     */
     resize(width: number, height: number): void {
         const { width: bgWidth, height: bgHeight } = this.background.texture;
         fitCover(this.background, width, height, bgWidth, bgHeight);
-        fitContain(this.content, width, height, DESIGN_WIDTH, DESIGN_HEIGHT);
+
+        const layout = pickLayout(GAME_LAYOUTS, width, height);
+        if (layout !== this.layout) this.applyLayout(layout);
+        fitContain(this.content, width, height, layout.designWidth, layout.designHeight);
+    }
+
+    /** Расставить элементы по координатам раскладки. Аналог Widget в Cocos, но явно и в одном месте. */
+    private applyLayout(layout: GameLayout): void {
+        this.layout = layout;
+        const { reels, fields, buttons } = layout;
+        this.reels.position.copyFrom(reels);
+        this.winSymbols.position.copyFrom(reels);
+        this.winLines.position.copyFrom(reels);
+        this.balanceField.position.copyFrom(fields.balance);
+        this.winField.position.copyFrom(fields.win);
+        this.betField.position.copyFrom(fields.bet);
+        this.spinButton.position.copyFrom(buttons.spin);
+        this.turboButton.position.copyFrom(buttons.turbo);
+        this.betButton.position.copyFrom(buttons.bet);
+        this.soundButton.position.copyFrom(buttons.sound);
     }
 
     /**
