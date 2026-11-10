@@ -1,10 +1,9 @@
-import type { Grid, RgsClient } from '../server/RgsClient';
+import type { Grid, LineWin, RgsClient, SpinResult } from '../server/RgsClient';
 import type { GameModel } from './GameModel';
 
 /**
  * Что контроллеру нужно от отображения. Контроллер не знает Pixi и конкретные классы view:
- * GameScreen передаёт объект, который умеет это делать (сейчас — ReelsView).
- * Сессия 3: появится showWins(wins).
+ * GameScreen собирает этот объект из своих view (барабаны, линии, поле выигрыша).
  */
 export interface GameView {
     /** Показать сетку сразу, без анимации. */
@@ -15,6 +14,10 @@ export interface GameView {
     stopOn(grid: Grid): Promise<void>;
     /** Остановить как можно быстрее (повторное нажатие во время вращения). */
     quickStop(): void;
+    /** Показать выигрыш спина. Промис завершается, когда показ закончен или пропущен. */
+    showWins(wins: readonly LineWin[], totalWin: number): Promise<void>;
+    /** Пропустить показ выигрыша (нажатие во время showWins). */
+    skipWins(): void;
 }
 
 /**
@@ -42,13 +45,20 @@ export class GameController {
 
     /**
      * Нажатие кнопки спина (сейчас — клик по полю). Одна кнопка, смысл зависит от состояния:
-     * idle — новый спин; spinning / stopping — quick stop.
+     * idle — новый спин; spinning / stopping — quick stop; showWins — пропустить показ выигрыша.
      */
     pressSpin(): void {
-        if (this.model.state === 'idle') {
-            void this.spin();
-        } else {
-            this.view.quickStop();
+        switch (this.model.state) {
+            case 'idle':
+                void this.spin();
+                break;
+            case 'spinning':
+            case 'stopping':
+                this.view.quickStop();
+                break;
+            case 'showWins':
+                this.view.skipWins();
+                break;
         }
     }
 
@@ -58,29 +68,39 @@ export class GameController {
 
         const bet = this.model.bet;
         this.model.state = 'spinning';
+        this.model.win = 0;
         // Ставку списываем сразу, не дожидаясь сервера: игрок должен видеть списание в момент нажатия.
         this.model.balance -= bet;
         // Барабаны крутятся сразу, параллельно с запросом: задержка сети прячется в анимации.
         this.view.startSpin();
 
+        // try только вокруг запроса: ошибка в анимации не должна возвращать ставку — сервер спин уже провёл.
+        let result: SpinResult;
         try {
-            const result = await this.rgs.spin(bet);
-            this.lastGrid = result.grid;
-            // Результат есть, барабаны садятся. Отдельное состояние: UI может, например,
-            // показать кнопку Stop как неактивную, а логика — не принимать новую ставку.
-            this.model.state = 'stopping';
-            await this.view.stopOn(result.grid);
-            // Итоговый баланс берём с сервера, а не считаем сами: сервер — источник правды.
-            // Сессия 3: сначала показ выигрыша и счётчик, потом баланс.
-            this.model.balance = result.balance;
-            console.log('win:', result.totalWin, 'balance:', result.balance, result.wins);
+            result = await this.rgs.spin(bet);
         } catch (error) {
             // Спин не состоялся — возвращаем ставку. В реальной игре — окно ошибки и повторный init.
             this.model.balance += bet;
             console.error('[GameController] spin failed', error);
             await this.view.stopOn(this.lastGrid);
-        } finally {
             this.model.state = 'idle';
+            return;
         }
+
+        this.lastGrid = result.grid;
+        // Результат есть, барабаны садятся. Отдельное состояние: UI может, например,
+        // показать кнопку Stop как неактивную, а логика — не принимать новую ставку.
+        this.model.state = 'stopping';
+        await this.view.stopOn(result.grid);
+
+        if (result.totalWin > 0) {
+            this.model.state = 'showWins';
+            this.model.win = result.totalWin;
+            await this.view.showWins(result.wins, result.totalWin);
+        }
+        // Итоговый баланс берём с сервера, а не считаем сами: сервер — источник правды.
+        // Начисляем после показа: игрок сначала видит выигрыш, потом он «переезжает» в баланс.
+        this.model.balance = result.balance;
+        this.model.state = 'idle';
     }
 }

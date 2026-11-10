@@ -1,10 +1,11 @@
 import EventEmitter from 'eventemitter3';
 
 /**
- * Состояния игры: idle → spinning (ждём сервер, барабаны крутятся) → stopping (результат есть,
- * барабаны садятся) → idle. ShowWins появится вместе с показом выигрышей (сессия 3).
+ * Состояния игры:
+ *   idle → spinning (ждём сервер, барабаны крутятся) → stopping (результат есть, барабаны садятся)
+ *        → showWins (только если есть выигрыш: показ линий и счётчика) → idle.
  */
-export type GameState = 'idle' | 'spinning' | 'stopping';
+export type GameState = 'idle' | 'spinning' | 'stopping' | 'showWins';
 
 /** События модели: имя → аргументы. eventemitter3 проверяет их типы в on/emit. */
 interface GameModelEvents {
@@ -12,6 +13,7 @@ interface GameModelEvents {
     betChanged: [bet: number];
     stateChanged: [state: GameState];
     turboChanged: [turbo: boolean];
+    winChanged: [win: number];
 }
 
 /**
@@ -26,6 +28,7 @@ export class GameModel extends EventEmitter<GameModelEvents> {
     private bets: readonly number[] = [];
     private betIndex = 0;
     private _turbo = false;
+    private _win = 0;
 
     get balance(): number {
         return this._balance;
@@ -56,6 +59,17 @@ export class GameModel extends EventEmitter<GameModelEvents> {
         if (value === this._turbo) return;
         this._turbo = value;
         this.emit('turboChanged', value);
+    }
+
+    /** Выигрыш последнего спина для поля WIN. Обнуляется при старте следующего спина. */
+    get win(): number {
+        return this._win;
+    }
+
+    set win(value: number) {
+        if (value === this._win) return;
+        this._win = value;
+        this.emit('winChanged', value);
     }
 
     get bet(): number {

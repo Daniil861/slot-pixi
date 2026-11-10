@@ -1,11 +1,12 @@
+import { gsap } from 'gsap';
 import { Container, Sprite, Text, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, REELS_HEIGHT, REELS_WIDTH } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
-import { GameController } from '../game/GameController';
+import { GameController, type GameView } from '../game/GameController';
 import type { GameModel } from '../game/GameModel';
-import type { RgsClient } from '../server/RgsClient';
+import type { LineWin, RgsClient } from '../server/RgsClient';
 import { ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
 
@@ -29,6 +30,9 @@ export class GameScreen extends Container implements Screen {
         text: '',
         style: { fontFamily: 'Arial', fontSize: 36, fontWeight: 'bold', fill: 0xf5d27a },
     });
+    /** Временно: пауза показа выигрыша. Заменят линии и счётчик (шаги 3–4 сессии 3). */
+    private winPause: gsap.core.Tween | undefined;
+    private finishWins: (() => void) | undefined;
 
     constructor(renderer: Renderer, private readonly model: GameModel, rgs: RgsClient) {
         super();
@@ -43,8 +47,16 @@ export class GameScreen extends Container implements Screen {
         this.infoText.position.set(DESIGN_WIDTH / 2, this.reels.y + REELS_HEIGHT + 110);
         this.content.addChild(this.infoText);
 
-        // ReelsView подходит под интерфейс GameView — контроллер не знает его класс.
-        this.controller = new GameController(model, rgs, this.reels);
+        // GameView собирается из нескольких view: контроллер не знает, кто что показывает.
+        const view: GameView = {
+            setGrid: (grid) => this.reels.setGrid(grid),
+            startSpin: () => this.reels.startSpin(),
+            stopOn: (grid) => this.reels.stopOn(grid),
+            quickStop: () => this.reels.quickStop(),
+            showWins: (wins, totalWin) => this.showWins(wins, totalWin),
+            skipWins: () => this.skipWins(),
+        };
+        this.controller = new GameController(model, rgs, view);
 
         // Ввод → контроллер. Временно клик по полю; сессия 3 — кнопка Spin.
         this.reels.eventMode = 'static';
@@ -58,6 +70,7 @@ export class GameScreen extends Container implements Screen {
         this.model.on('balanceChanged', this.updateInfo, this);
         this.model.on('betChanged', this.updateInfo, this);
         this.model.on('turboChanged', this.onTurboChanged, this);
+        this.model.on('winChanged', this.updateInfo, this);
     }
 
     async show(): Promise<void> {
@@ -84,6 +97,8 @@ export class GameScreen extends Container implements Screen {
         this.model.off('balanceChanged', this.updateInfo, this);
         this.model.off('betChanged', this.updateInfo, this);
         this.model.off('turboChanged', this.onTurboChanged, this);
+        this.model.off('winChanged', this.updateInfo, this);
+        this.winPause?.kill();
         window.removeEventListener('keydown', this.onKeyDown);
         super.destroy(options);
     }
@@ -105,8 +120,30 @@ export class GameScreen extends Container implements Screen {
         }
     };
 
+    /**
+     * Временный показ выигрыша: строка WIN в infoText и пауза. Пауза — gsap.delayedCall, а не setTimeout:
+     * GSAP обновляется из app.ticker, поэтому на неактивной вкладке пауза стоит вместе с игрой.
+     */
+    private showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
+        console.log('win:', totalWin, wins);
+        return new Promise((resolve) => {
+            this.finishWins = () => {
+                this.winPause?.kill();
+                this.winPause = undefined;
+                this.finishWins = undefined;
+                resolve();
+            };
+            this.winPause = gsap.delayedCall(this.model.turbo ? 0.6 : 1.5, this.finishWins);
+        });
+    }
+
+    private skipWins(): void {
+        this.finishWins?.();
+    }
+
     private updateInfo(): void {
         const turbo = this.model.turbo ? '    TURBO' : '';
-        this.infoText.text = `BALANCE ${this.model.balance}    BET ${this.model.bet}${turbo}`;
+        const win = this.model.win > 0 ? `    WIN ${this.model.win}` : '';
+        this.infoText.text = `BALANCE ${this.model.balance}    BET ${this.model.bet}${win}${turbo}`;
     }
 }
