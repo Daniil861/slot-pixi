@@ -9,7 +9,6 @@ import {
     PANEL_GAP,
     REELS_HEIGHT,
     REELS_WIDTH,
-    SYMBOL_SIZE,
 } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { SYMBOL_SPINE } from '../config/spine';
@@ -22,12 +21,12 @@ import type { GameModel, GameState } from '../game/GameModel';
 import type { LineWin, RgsClient } from '../server/RgsClient';
 import { ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
-import { SymbolSpine } from '../views/spine/SymbolSpine';
 import { Button } from '../views/ui/Button';
 import { installBitmapFont } from '../views/ui/fonts';
 import { ValueField } from '../views/ui/ValueField';
 import { WinLinesView } from '../views/wins/WinLinesView';
 import { WinPresenter } from '../views/wins/WinPresenter';
+import { WinSymbolsView } from '../views/wins/WinSymbolsView';
 
 /**
  * Игровой экран: создаёт view, раскладывает их и связывает с контроллером.
@@ -43,11 +42,10 @@ export class GameScreen extends Container implements Screen {
     private readonly background = Sprite.from('background');
     private readonly content = new Container();
     private readonly reels: ReelsView;
+    private readonly winSymbols = new WinSymbolsView(SYMBOL_SPINE);
     private readonly winLines = new WinLinesView(WIN_LINES_STYLE);
     private readonly winPresenter: WinPresenter;
     private readonly controller: GameController;
-    /** Временно (сессия 4, шаг 1): проверка Spine — wild слева от поля, win на каждом выигрыше. В шаге 2 Spine переедет на выигрышные ячейки. */
-    private readonly spinePreview = new SymbolSpine(SYMBOL_SPINE, SYMBOL_SIZE);
     private readonly spinButton = new Button(PRIMARY_BUTTON, 'SPIN');
     private readonly turboButton = new Button(SECONDARY_BUTTON, 'TURBO');
     private readonly betButton = new Button(SECONDARY_BUTTON, 'BET');
@@ -68,17 +66,12 @@ export class GameScreen extends Container implements Screen {
         this.reels = new ReelsView(new SymbolTextures(renderer, SYMBOL_PLACEHOLDER), this.currentTiming(), SYMBOL_HIGHLIGHT_STYLE);
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
-        // Линии — поверх рамки (добавлены позже), в координатах окна барабанов.
+        // Поверх барабанов и рамки (порядок addChild), в координатах окна барабанов:
+        // Spine выигрышных символов, над ними — линии.
+        this.winSymbols.position.copyFrom(this.reels.position);
         this.winLines.position.copyFrom(this.reels.position);
-        this.content.addChild(this.winLines);
-        this.winPresenter = new WinPresenter(this.reels, this.winLines, this.currentWinsTiming());
-
-        // Временно: превью Spine по центру полосы слева от рамки, на высоте среднего ряда.
-        this.spinePreview.setSymbol('wild');
-        this.spinePreview.playIdle();
-        this.spinePreview.position.set((this.reels.x - FRAME_BORDER) / 2, DESIGN_HEIGHT / 2);
-        this.spinePreview.onImpact = () => console.log('[Spine] impact');
-        this.content.addChild(this.spinePreview);
+        this.content.addChild(this.winSymbols, this.winLines);
+        this.winPresenter = new WinPresenter(this.reels, this.winLines, this.winSymbols, this.currentWinsTiming());
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
         // из стиля BitmapText, а системного шрифта с таким именем нет — получится шрифт по умолчанию.
@@ -137,7 +130,7 @@ export class GameScreen extends Container implements Screen {
     /** Вызывается каждый кадр: Navigation подписал этот метод на app.ticker. */
     update(ticker: Ticker): void {
         this.reels.update(ticker.deltaMS);
-        this.spinePreview.update(ticker.deltaMS / 1000);
+        this.winSymbols.update(ticker.deltaMS / 1000);
     }
 
     resize(width: number, height: number): void {
@@ -214,7 +207,6 @@ export class GameScreen extends Container implements Screen {
     private async showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
         this.winsSkipped = false;
         this.winPresenter.showAll(wins);
-        void this.spinePreview.playWin();
         try {
             await this.playWinCounter(totalWin);
         } finally {

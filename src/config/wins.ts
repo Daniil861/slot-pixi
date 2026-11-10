@@ -13,14 +13,13 @@ export interface WinsTiming {
     readonly cycleLineSec: number;
 }
 
-/** Подсветка символов на барабанах. */
+/**
+ * Подсветка на барабанах при показе выигрыша. Сама анимация выигрышного символа — Spine (config/spine.ts),
+ * барабан только затемняет остальные символы.
+ */
 export interface SymbolHighlightStyle {
     /** Затемнение невыигрышных символов: tint умножает цвет текстуры, 0xffffff — без изменений. */
     readonly dimTint: number;
-    /** Во сколько раз растёт выигрышный символ на пике пульсации. */
-    readonly pulseScale: number;
-    /** Пульсация в одну сторону (yoyo: туда и обратно — вдвое дольше). */
-    readonly pulseSec: number;
 }
 
 /** Линии выплат. */
@@ -49,8 +48,6 @@ export const TURBO_WINS_TIMING = Object.freeze({
 
 export const SYMBOL_HIGHLIGHT_STYLE = Object.freeze({
     dimTint: 0x666666,
-    pulseScale: 1.15,
-    pulseSec: 0.35,
 } satisfies SymbolHighlightStyle);
 
 export const WIN_LINES_STYLE = Object.freeze({

@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { REEL_COUNT } from '../../config/game';
+import { REEL_COUNT, type SymbolId } from '../../config/game';
 import { CELL_SIZE, FRAME_BORDER, REELS_HEIGHT, REELS_WIDTH } from '../../config/layout';
 import type { ReelsTiming } from '../../config/reels';
 import type { SymbolHighlightStyle } from '../../config/wins';
@@ -22,6 +22,8 @@ export class ReelsView extends Container {
     private spinTime = 0;
     /** Запрошенная остановка: ждёт, пока пройдёт minSpinSec. */
     private pendingStop: { grid: Grid; resolve: () => void } | undefined;
+    /** Сетка, которую барабаны показывают (или на которой остановятся): из неё — символ в ячейке для Spine. */
+    private grid: Grid = [];
     /** Quick stop нажат до того, как пришёл результат: остановимся сразу, как только он придёт. */
     private quickStopRequested = false;
 
@@ -58,6 +60,7 @@ export class ReelsView extends Container {
 
     /** Показать сетку из ответа сервера без анимации: grid[reel][row]. */
     setGrid(grid: Grid): void {
+        this.grid = grid;
         grid.forEach((column, i) => this.reels[i]!.setSymbols(column));
     }
 
@@ -77,6 +80,11 @@ export class ReelsView extends Container {
 
     clearHighlight(): void {
         this.reels.forEach((reel) => reel.clearHighlight());
+    }
+
+    /** Символ в ячейке [reel, row] — из сетки, а не из LineWin.symbol: на месте wild должен анимироваться wild. */
+    symbolAt(reel: number, row: number): SymbolId {
+        return this.grid[reel]![row]!;
     }
 
     /** Сменить тайминги (turbo). Вращение и остановка, которые уже идут, доигрываются со старыми. */
@@ -105,6 +113,7 @@ export class ReelsView extends Container {
      * контроллер ждёт его через await и только потом показывает выигрыш.
      */
     stopOn(grid: Grid): Promise<void> {
+        this.grid = grid;
         return new Promise((resolve) => {
             this.pendingStop = { grid, resolve };
         });

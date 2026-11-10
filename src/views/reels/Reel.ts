@@ -62,45 +62,24 @@ export class Reel extends Container {
     }
 
     /**
-     * Подсветить символы в рядах rows (барабан стоит): они пульсируют поверх соседей, остальные затемнены.
-     * Пустой rows — весь барабан затемнён (на нём нет выигрышных символов).
-     *
-     * zIndex работает только среди детей одного родителя (как siblingIndex в Cocos). Увеличенный символ
-     * должен перекрывать соседей и в своём барабане, и в соседних, поэтому zIndex ставим на двух уровнях:
-     * спрайту внутри Reel и самому Reel внутри слоя символов.
+     * Показ выигрыша (барабан стоит): символы в рядах rows скрыты — на их месте играет Spine
+     * (слой WinSymbolsView поверх барабанов), остальные затемнены. Пустой rows — весь барабан затемнён.
+     * Скрываем через visible, а не убираем из дерева: спрайт остаётся в пуле ленты.
      */
     highlight(rows: readonly number[]): void {
         this.clearHighlight();
-        const { dimTint, pulseScale, pulseSec } = this.highlightStyle;
-        this.sprites.forEach((sprite) => (sprite.tint = dimTint));
+        this.sprites.forEach((sprite) => (sprite.tint = this.highlightStyle.dimTint));
         for (const row of rows) {
-            const sprite = this.spriteAtRow(row);
-            sprite.tint = 0xffffff;
-            // В v8 сеттер zIndex сам включает parent.sortableChildren и помечает порядок «грязным»:
-            // перед отрисовкой родитель отсортирует children по zIndex (при равных — порядок addChild).
-            sprite.zIndex = 1;
-            const base = sprite.scale.x;
-            gsap.to(sprite.scale, {
-                x: base * pulseScale,
-                y: base * pulseScale,
-                duration: pulseSec,
-                ease: 'sine.inOut',
-                yoyo: true,
-                repeat: -1,
-            });
+            this.spriteAtRow(row).visible = false;
         }
-        this.zIndex = rows.length > 0 ? 1 : 0;
     }
 
-    /** Снять подсветку: обычный цвет, размер и порядок. */
+    /** Снять подсветку: обычный цвет, все символы видны. */
     clearHighlight(): void {
         for (const sprite of this.sprites) {
-            gsap.killTweensOf(sprite.scale);
             sprite.tint = 0xffffff;
-            sprite.zIndex = 0;
-            sprite.setSize(SYMBOL_SIZE);
+            sprite.visible = true;
         }
-        this.zIndex = 0;
     }
 
     /** Поставить ленту ровно на символы видимых рядов (сверху вниз), без анимации. */
@@ -172,7 +151,6 @@ export class Reel extends Container {
         this.stopCall?.kill();
         this.landingTimeline?.kill();
         gsap.killTweensOf(this);
-        this.sprites.forEach((sprite) => gsap.killTweensOf(sprite.scale));
         super.destroy(options);
     }
 
