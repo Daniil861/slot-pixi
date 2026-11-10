@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { Container, Sprite, Text, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
+import { Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, FRAME_BORDER, REELS_HEIGHT, REELS_WIDTH } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { fitContain, fitCover } from '../engine/layout';
@@ -8,8 +8,13 @@ import { GameController, type GameView } from '../game/GameController';
 import type { GameModel, GameState } from '../game/GameModel';
 import type { LineWin, RgsClient } from '../server/RgsClient';
 import { ReelsView } from '../views/reels/ReelsView';
-import { Button } from '../views/ui/Button';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
+import { Button } from '../views/ui/Button';
+import { installFonts } from '../views/ui/fonts';
+import { ValueField } from '../views/ui/ValueField';
+
+/** Цвета второстепенных кнопок (Turbo, Bet). */
+const SECONDARY_COLORS = { normal: 0x37474f, hover: 0x546e7a, pressed: 0x263238 };
 
 /**
  * Игровой экран: создаёт view, раскладывает их и связывает с контроллером.
@@ -27,21 +32,16 @@ export class GameScreen extends Container implements Screen {
     private readonly reels: ReelsView;
     private readonly controller: GameController;
     private readonly spinButton = new Button({ width: 240, height: 140, text: 'SPIN', fontSize: 52 });
-    private readonly turboButton = new Button({
-        width: 200,
-        height: 80,
-        text: 'TURBO',
-        fontSize: 32,
-        colors: { normal: 0x37474f, hover: 0x546e7a, pressed: 0x263238 },
-    });
-    /** Временно: заменит BalancePanel на BitmapText в сессии 3. */
-    private readonly infoText = new Text({
-        text: '',
-        style: { fontFamily: 'Arial', fontSize: 36, fontWeight: 'bold', fill: 0xf5d27a },
-    });
-    /** Временно: пауза показа выигрыша. Заменят линии и счётчик (шаги 3–4 сессии 3). */
-    private winPause: gsap.core.Tween | undefined;
-    private finishWins: (() => void) | undefined;
+    private readonly turboButton = new Button({ width: 200, height: 80, text: 'TURBO', fontSize: 32, colors: SECONDARY_COLORS });
+    private readonly betButton = new Button({ width: 200, height: 80, text: 'BET', fontSize: 32, colors: SECONDARY_COLORS });
+    // Поля создаются в конструкторе: до первого BitmapText должен быть установлен шрифт.
+    private readonly balanceField: ValueField;
+    private readonly winField: ValueField;
+    private readonly betField: ValueField;
+    /** Пауза после докрутки счётчика выигрыша. Позже на её месте — показ линий (шаг 4). */
+    private winHold: gsap.core.Tween | undefined;
+    private finishWinHold: (() => void) | undefined;
+    private winsSkipped = false;
 
     constructor(renderer: Renderer, private readonly model: GameModel, rgs: RgsClient) {
         super();
@@ -52,9 +52,18 @@ export class GameScreen extends Container implements Screen {
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
 
-        this.infoText.anchor.set(0.5, 0);
-        this.infoText.position.set(DESIGN_WIDTH / 2, this.reels.y + REELS_HEIGHT + 110);
-        this.content.addChild(this.infoText);
+        // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
+        // из стиля BitmapText, а системного шрифта 'UiFont' нет — получится шрифт по умолчанию.
+        installFonts();
+        this.balanceField = new ValueField({ title: 'BALANCE' });
+        this.winField = new ValueField({ title: 'WIN', valueSize: 56, valueColor: 0xf5d27a });
+        this.betField = new ValueField({ title: 'BET' });
+        // Панель под рамкой: баланс слева, выигрыш по центру, ставка справа.
+        const panelY = this.reels.y + REELS_HEIGHT + FRAME_BORDER + 20;
+        this.balanceField.position.set(this.reels.x + REELS_WIDTH * 0.15, panelY);
+        this.winField.position.set(this.reels.x + REELS_WIDTH * 0.5, panelY);
+        this.betField.position.set(this.reels.x + REELS_WIDTH * 0.85, panelY);
+        this.content.addChild(this.balanceField, this.winField, this.betField);
 
         // GameView собирается из нескольких view: контроллер не знает, кто что показывает.
         const view: GameView = {
@@ -68,24 +77,24 @@ export class GameScreen extends Container implements Screen {
         this.controller = new GameController(model, rgs, view);
 
         // Кнопки справа от поля, по центру свободной полосы между рамкой и краем дизайн-области.
-        const panelX = (this.reels.x + REELS_WIDTH + FRAME_BORDER + DESIGN_WIDTH) / 2;
-        this.spinButton.position.set(panelX, DESIGN_HEIGHT / 2);
-        this.turboButton.position.set(panelX, DESIGN_HEIGHT / 2 + 160);
-        this.content.addChild(this.spinButton, this.turboButton);
+        const columnX = (this.reels.x + REELS_WIDTH + FRAME_BORDER + DESIGN_WIDTH) / 2;
+        this.spinButton.position.set(columnX, DESIGN_HEIGHT / 2);
+        this.turboButton.position.set(columnX, DESIGN_HEIGHT / 2 + 160);
+        this.betButton.position.set(columnX, DESIGN_HEIGHT / 2 + 260);
+        this.content.addChild(this.spinButton, this.turboButton, this.betButton);
 
         // Ввод → контроллер / модель. Кнопка не решает, можно ли крутить: это проверяет контроллер.
         this.spinButton.onPress = () => this.controller.pressSpin();
         this.turboButton.onPress = () => (this.model.turbo = !this.model.turbo);
+        this.betButton.onPress = () => this.model.nextBet();
 
         // Модель → отображение.
-        this.model.on('balanceChanged', this.updateInfo, this);
-        this.model.on('betChanged', this.updateInfo, this);
+        this.model.on('balanceChanged', this.onBalanceChanged, this);
+        this.model.on('betChanged', this.onBetChanged, this);
+        this.model.on('winChanged', this.onWinChanged, this);
         this.model.on('turboChanged', this.onTurboChanged, this);
-        this.model.on('winChanged', this.updateInfo, this);
-        this.model.on('stateChanged', this.updateSpinButton, this);
-        this.model.on('balanceChanged', this.updateSpinButton, this);
-        this.model.on('betChanged', this.updateSpinButton, this);
-        this.updateSpinButton();
+        this.model.on('stateChanged', this.updateButtons, this);
+        this.updateButtons();
         this.onTurboChanged();
     }
 
@@ -106,18 +115,16 @@ export class GameScreen extends Container implements Screen {
 
     /**
      * Модель живёт дольше экрана, поэтому подписки на неё снимаем вручную. Иначе после destroy
-     * модель продолжит вызывать updateInfo уничтоженного экрана — утечка и ошибки.
+     * модель продолжит вызывать обработчики уничтоженного экрана — утечка и ошибки.
      * Аналог off() в onDestroy компонента Cocos.
      */
     override destroy(options?: DestroyOptions): void {
-        this.model.off('balanceChanged', this.updateInfo, this);
-        this.model.off('betChanged', this.updateInfo, this);
+        this.model.off('balanceChanged', this.onBalanceChanged, this);
+        this.model.off('betChanged', this.onBetChanged, this);
+        this.model.off('winChanged', this.onWinChanged, this);
         this.model.off('turboChanged', this.onTurboChanged, this);
-        this.model.off('winChanged', this.updateInfo, this);
-        this.model.off('stateChanged', this.updateSpinButton, this);
-        this.model.off('balanceChanged', this.updateSpinButton, this);
-        this.model.off('betChanged', this.updateSpinButton, this);
-        this.winPause?.kill();
+        this.model.off('stateChanged', this.updateButtons, this);
+        this.winHold?.kill();
         super.destroy(options);
     }
 
@@ -129,43 +136,62 @@ export class GameScreen extends Container implements Screen {
     private onTurboChanged(): void {
         this.reels.setTiming(this.currentTiming());
         this.turboButton.text = this.model.turbo ? 'TURBO ON' : 'TURBO';
-        this.updateInfo();
+    }
+
+    /** Баланс показываем сразу: и списание ставки, и начисление после показа выигрыша — без прокрутки. */
+    private onBalanceChanged(balance: number): void {
+        void this.balanceField.setValue(balance);
+        this.updateButtons();
+    }
+
+    private onBetChanged(bet: number): void {
+        void this.betField.setValue(bet);
+        this.updateButtons();
+    }
+
+    /** Обнуление на старте спина — сразу. Рост до выигрыша докручивает showWins: ему нужен момент окончания. */
+    private onWinChanged(win: number): void {
+        if (win === 0) void this.winField.setValue(0);
     }
 
     /**
-     * Одна кнопка — три смысла (см. GameController.pressSpin). В idle она выключена, если крутить нельзя
+     * Spin — одна кнопка, три смысла (см. GameController.pressSpin). В idle она выключена, если крутить нельзя
      * (ставка больше баланса); в остальных состояниях всегда доступна: STOP — quick stop, SKIP — пропуск выигрыша.
+     * Ставку меняют только в idle.
      */
-    private updateSpinButton(): void {
+    private updateButtons(): void {
         const texts: Record<GameState, string> = { idle: 'SPIN', spinning: 'STOP', stopping: 'STOP', showWins: 'SKIP' };
         const state = this.model.state;
         this.spinButton.text = texts[state];
         this.spinButton.enabled = state !== 'idle' || this.model.canSpin;
+        this.betButton.enabled = state === 'idle';
     }
 
     /**
-     * Временный показ выигрыша: строка WIN в infoText и пауза. Пауза — gsap.delayedCall, а не setTimeout:
-     * GSAP обновляется из app.ticker, поэтому на неактивной вкладке пауза стоит вместе с игрой.
+     * Показ выигрыша: счётчик WIN докручивается от 0 до выигрыша, затем короткая пауза.
+     * Skip на любом этапе — счётчик сразу в конечное значение, показ заканчивается.
      */
-    private showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
+    private async showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
         console.log('win:', totalWin, wins);
-        return new Promise((resolve) => {
-            this.finishWins = () => {
-                this.winPause?.kill();
-                this.winPause = undefined;
-                this.finishWins = undefined;
+        this.winsSkipped = false;
+        const turbo = this.model.turbo;
+        await this.winField.setValue(totalWin, turbo ? 0.4 : 1.2);
+        if (this.winsSkipped) return;
+        // Пауза — gsap.delayedCall, а не setTimeout: GSAP идёт от app.ticker и стоит вместе с игрой.
+        await new Promise<void>((resolve) => {
+            this.finishWinHold = () => {
+                this.winHold?.kill();
+                this.winHold = undefined;
+                this.finishWinHold = undefined;
                 resolve();
             };
-            this.winPause = gsap.delayedCall(this.model.turbo ? 0.6 : 1.5, this.finishWins);
+            this.winHold = gsap.delayedCall(turbo ? 0.3 : 0.8, this.finishWinHold);
         });
     }
 
     private skipWins(): void {
-        this.finishWins?.();
-    }
-
-    private updateInfo(): void {
-        const win = this.model.win > 0 ? `    WIN ${this.model.win}` : '';
-        this.infoText.text = `BALANCE ${this.model.balance}    BET ${this.model.bet}${win}`;
+        this.winsSkipped = true;
+        this.winField.finish();
+        this.finishWinHold?.();
     }
 }
