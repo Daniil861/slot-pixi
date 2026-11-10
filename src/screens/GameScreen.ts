@@ -12,6 +12,8 @@ import { SymbolTextures } from '../views/reels/SymbolTextures';
 import { Button } from '../views/ui/Button';
 import { installFonts } from '../views/ui/fonts';
 import { ValueField } from '../views/ui/ValueField';
+import { WinLinesView } from '../views/wins/WinLinesView';
+import { WinPresenter } from '../views/wins/WinPresenter';
 
 /** Цвета второстепенных кнопок (Turbo, Bet). */
 const SECONDARY_COLORS = { normal: 0x37474f, hover: 0x546e7a, pressed: 0x263238 };
@@ -30,6 +32,8 @@ export class GameScreen extends Container implements Screen {
     private readonly background = Sprite.from('background');
     private readonly content = new Container();
     private readonly reels: ReelsView;
+    private readonly winLines = new WinLinesView();
+    private readonly winPresenter: WinPresenter;
     private readonly controller: GameController;
     private readonly spinButton = new Button({ width: 240, height: 140, text: 'SPIN', fontSize: 52 });
     private readonly turboButton = new Button({ width: 200, height: 80, text: 'TURBO', fontSize: 32, colors: SECONDARY_COLORS });
@@ -38,7 +42,7 @@ export class GameScreen extends Container implements Screen {
     private readonly balanceField: ValueField;
     private readonly winField: ValueField;
     private readonly betField: ValueField;
-    /** Пауза после докрутки счётчика выигрыша. Позже на её месте — показ линий (шаг 4). */
+    /** Пауза после докрутки счётчика: все выигрышные линии ещё на экране. */
     private winHold: gsap.core.Tween | undefined;
     private finishWinHold: (() => void) | undefined;
     private winsSkipped = false;
@@ -51,6 +55,10 @@ export class GameScreen extends Container implements Screen {
         this.reels = new ReelsView(new SymbolTextures(renderer), this.currentTiming());
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
+        // Линии — поверх рамки (добавлены позже), в координатах окна барабанов.
+        this.winLines.position.copyFrom(this.reels.position);
+        this.content.addChild(this.winLines);
+        this.winPresenter = new WinPresenter(this.reels, this.winLines);
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
         // из стиля BitmapText, а системного шрифта 'UiFont' нет — получится шрифт по умолчанию.
@@ -67,8 +75,12 @@ export class GameScreen extends Container implements Screen {
 
         // GameView собирается из нескольких view: контроллер не знает, кто что показывает.
         const view: GameView = {
+            setPaylines: (paylines) => this.winLines.setPaylines(paylines),
             setGrid: (grid) => this.reels.setGrid(grid),
-            startSpin: () => this.reels.startSpin(),
+            startSpin: () => {
+                this.winPresenter.clear();
+                this.reels.startSpin();
+            },
             stopOn: (grid) => this.reels.stopOn(grid),
             quickStop: () => this.reels.quickStop(),
             showWins: (wins, totalWin) => this.showWins(wins, totalWin),
@@ -125,6 +137,7 @@ export class GameScreen extends Container implements Screen {
         this.model.off('turboChanged', this.onTurboChanged, this);
         this.model.off('stateChanged', this.updateButtons, this);
         this.winHold?.kill();
+        this.winPresenter.destroy();
         super.destroy(options);
     }
 
@@ -168,12 +181,21 @@ export class GameScreen extends Container implements Screen {
     }
 
     /**
-     * Показ выигрыша: счётчик WIN докручивается от 0 до выигрыша, затем короткая пауза.
+     * Показ выигрыша: все линии и символы сразу, счётчик WIN докручивается от 0, затем короткая пауза.
      * Skip на любом этапе — счётчик сразу в конечное значение, показ заканчивается.
+     * После показа (и после skip) линии перебираются по одной до следующего спина — это уже idle.
      */
     private async showWins(wins: readonly LineWin[], totalWin: number): Promise<void> {
-        console.log('win:', totalWin, wins);
         this.winsSkipped = false;
+        this.winPresenter.showAll(wins);
+        try {
+            await this.playWinCounter(totalWin);
+        } finally {
+            this.winPresenter.startCycle(wins);
+        }
+    }
+
+    private async playWinCounter(totalWin: number): Promise<void> {
         const turbo = this.model.turbo;
         await this.winField.setValue(totalWin, turbo ? 0.4 : 1.2);
         if (this.winsSkipped) return;

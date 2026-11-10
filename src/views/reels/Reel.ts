@@ -1,3 +1,9 @@
+
+/** Затемнение невыигрышных символов при показе выигрыша. tint умножает цвет текстуры, белый — без изменений. */
+const DIM_TINT = 0x666666;
+/** Пульсация выигрышного символа: во сколько раз растёт и за сколько секунд (в одну сторону). */
+const PULSE_SCALE = 1.15;
+const PULSE_SEC = 0.35;
 import { gsap } from 'gsap';
 import { Container, Sprite, type DestroyOptions } from 'pixi.js';
 import { ROW_COUNT, randomSymbolId, type SymbolId } from '../../config/game';
@@ -59,6 +65,47 @@ export class Reel extends Container {
         this.layout();
     }
 
+    /**
+     * Подсветить символы в рядах rows (барабан стоит): они пульсируют поверх соседей, остальные затемнены.
+     * Пустой rows — весь барабан затемнён (на нём нет выигрышных символов).
+     *
+     * zIndex работает только среди детей одного родителя (как siblingIndex в Cocos). Увеличенный символ
+     * должен перекрывать соседей и в своём барабане, и в соседних, поэтому zIndex ставим на двух уровнях:
+     * спрайту внутри Reel и самому Reel внутри слоя символов.
+     */
+    highlight(rows: readonly number[]): void {
+        this.clearHighlight();
+        this.sprites.forEach((sprite) => (sprite.tint = DIM_TINT));
+        for (const row of rows) {
+            const sprite = this.spriteAtRow(row);
+            sprite.tint = 0xffffff;
+            // В v8 сеттер zIndex сам включает parent.sortableChildren и помечает порядок «грязным»:
+            // перед отрисовкой родитель отсортирует children по zIndex (при равных — порядок addChild).
+            sprite.zIndex = 1;
+            const base = sprite.scale.x;
+            gsap.to(sprite.scale, {
+                x: base * PULSE_SCALE,
+                y: base * PULSE_SCALE,
+                duration: PULSE_SEC,
+                ease: 'sine.inOut',
+                yoyo: true,
+                repeat: -1,
+            });
+        }
+        this.zIndex = rows.length > 0 ? 1 : 0;
+    }
+
+    /** Снять подсветку: обычный цвет, размер и порядок. */
+    clearHighlight(): void {
+        for (const sprite of this.sprites) {
+            gsap.killTweensOf(sprite.scale);
+            sprite.tint = 0xffffff;
+            sprite.zIndex = 0;
+            sprite.setSize(SYMBOL_SIZE);
+        }
+        this.zIndex = 0;
+    }
+
     /** Поставить ленту ровно на символы видимых рядов (сверху вниз), без анимации. */
     setSymbols(ids: readonly SymbolId[]): void {
         this.offset = 0;
@@ -73,6 +120,7 @@ export class Reel extends Container {
     }
 
     startSpin(): void {
+        this.clearHighlight();
         this.spinning = true;
     }
 
@@ -127,6 +175,7 @@ export class Reel extends Container {
         this.stopCall?.kill();
         this.landingTimeline?.kill();
         gsap.killTweensOf(this);
+        this.sprites.forEach((sprite) => gsap.killTweensOf(sprite.scale));
         super.destroy(options);
     }
 
@@ -189,6 +238,13 @@ export class Reel extends Container {
         const request = this.stopRequest;
         this.stopRequest = undefined;
         request?.resolve();
+    }
+
+    /** Спрайт в видимом ряду row (0 — верхний). Только для стоящего барабана: offset целый. */
+    private spriteAtRow(row: number): Sprite {
+        // Обратная формула раскладки: спрайт i стоит в слоте (i + offset) mod N, видимый ряд row — слот row + 1.
+        const index = mod(row + 1 - Math.round(this.offset), STRIP_LENGTH);
+        return this.sprites[index]!;
     }
 
     private setSymbol(sprite: Sprite, id: SymbolId): void {

@@ -12,7 +12,7 @@ export class MockRgs implements RgsClient {
 
     async init(): Promise<InitResult> {
         await delay(this.latencyMs);
-        return { balance: this.balance, grid: randomGrid(), bets: BETS };
+        return { balance: this.balance, grid: randomGrid(), bets: BETS, paylines: PAYLINES };
     }
 
     async spin(bet: number): Promise<SpinResult> {

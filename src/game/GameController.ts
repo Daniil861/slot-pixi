@@ -1,4 +1,4 @@
-import type { Grid, LineWin, RgsClient, SpinResult } from '../server/RgsClient';
+import type { Grid, LineWin, Payline, RgsClient, SpinResult } from '../server/RgsClient';
 import type { GameModel } from './GameModel';
 
 /**
@@ -6,6 +6,8 @@ import type { GameModel } from './GameModel';
  * GameScreen собирает этот объект из своих view (барабаны, линии, поле выигрыша).
  */
 export interface GameView {
+    /** Форма линий выплат из InitResult — для их отрисовки. */
+    setPaylines(paylines: readonly Payline[]): void;
     /** Показать сетку сразу, без анимации. */
     setGrid(grid: Grid): void;
     /** Запустить вращение. Вызывается до запроса к серверу — игрок не ждёт сеть. */
@@ -40,6 +42,7 @@ export class GameController {
         this.model.setBets(result.bets);
         this.model.balance = result.balance;
         this.lastGrid = result.grid;
+        this.view.setPaylines(result.paylines);
         this.view.setGrid(result.grid);
     }
 

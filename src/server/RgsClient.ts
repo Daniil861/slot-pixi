@@ -6,6 +6,9 @@ import type { SymbolId } from '../config/game';
 /** grid[reel][row] — символы видимого окна, как их надо показать на барабанах. */
 export type Grid = SymbolId[][];
 
+/** Линия выплат: для каждого барабана — индекс ряда (0 — верхний). */
+export type Payline = readonly number[];
+
 export interface LineWin {
     lineIndex: number;
     symbol: SymbolId;
@@ -21,6 +24,8 @@ export interface InitResult {
     /** Сетка, которую игрок видит до первого спина (обычно последний результат сессии). */
     grid: Grid;
     bets: readonly number[];
+    /** Форма линий — чтобы клиент мог их нарисовать. Выплаты по ним считает только сервер. */
+    paylines: readonly Payline[];
 }
 
 export interface SpinResult {

@@ -59,6 +59,24 @@ export class ReelsView extends Container {
         grid.forEach((column, i) => this.reels[i]!.setSymbols(column));
     }
 
+    /**
+     * Подсветить выигрышные позиции [reel, row]; остальные символы затемняются.
+     * Пустой список — снять подсветку.
+     */
+    highlight(positions: readonly (readonly [reel: number, row: number])[]): void {
+        if (positions.length === 0) {
+            this.clearHighlight();
+            return;
+        }
+        this.reels.forEach((reel, i) => {
+            reel.highlight(positions.filter(([r]) => r === i).map(([, row]) => row));
+        });
+    }
+
+    clearHighlight(): void {
+        this.reels.forEach((reel) => reel.clearHighlight());
+    }
+
     /** Сменить тайминги (turbo). Вращение и остановка, которые уже идут, доигрываются со старыми. */
     setTiming(timing: ReelsTiming): void {
         this.timing = timing;
