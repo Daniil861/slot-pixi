@@ -7,23 +7,37 @@ import type { WinCell, WinSymbolsView } from './WinSymbolsView';
 
 type Position = readonly [reel: number, row: number];
 
+/** Что сейчас показывается: ничего, все линии сразу или перебор по одной. */
+type ShowMode = 'none' | 'all' | 'cycle';
+
 /**
- * Показ выигрыша на поле: линии + Spine-анимация выигрышных символов + затемнение остальных.
+ * Показ выигрыша: линии + Spine-анимация выигрышных символов + затемнение остальных.
  * Правил игры не знает — всё берёт из LineWin.
  *
  * Два режима, как в большинстве слотов:
  * - showAll — сразу все выигрышные линии и символы (пока крутится счётчик WIN);
  * - startCycle — в idle линии показываются по одной по кругу, пока игрок не запустит новый спин.
+ *
+ * Spine-символы бьют (событие impact) в обоих режимах, а наружу onWinImpact уходит только в showAll:
+ * звук выигрыша — один раз на спин, при переборе линий тишина.
  */
 export class WinPresenter {
+    /** Удар выигрышных символов в режиме «все линии» — для звука выигрыша. */
+    onWinImpact: (() => void) | undefined;
+
     private cycleCall: gsap.core.Tween | undefined;
+    private mode: ShowMode = 'none';
 
     constructor(
         private readonly reels: ReelsView,
         private readonly lines: WinLinesView,
         private readonly symbols: WinSymbolsView,
         private timing: WinsTiming,
-    ) {}
+    ) {
+        this.symbols.onImpact = () => {
+            if (this.mode === 'all') this.onWinImpact?.();
+        };
+    }
 
     /** Сменить тайминги (turbo). Идущая прорисовка доигрывается со старыми, перебор подхватит новые на следующей линии. */
     setTiming(timing: WinsTiming): void {
@@ -32,6 +46,7 @@ export class WinPresenter {
 
     showAll(wins: readonly LineWin[]): void {
         this.stopCycle();
+        this.mode = 'all';
         this.lines.show(wins.map((w) => w.lineIndex), this.timing.lineDrawSec);
         // Ячейка может входить в несколько линий — анимируем её один раз.
         this.highlight(uniquePositions(wins.flatMap((w) => w.positions)));
@@ -40,7 +55,9 @@ export class WinPresenter {
     /** Перебор линий по одной. Одна линия — перебирать нечего, остаётся showAll. */
     startCycle(wins: readonly LineWin[]): void {
         this.stopCycle();
+        // Одна линия: остаётся картинка showAll, Spine уже доиграл win и стоит в idle — повторного удара не будет.
         if (wins.length < 2) return;
+        this.mode = 'cycle';
         const step = (i: number) => {
             const win = wins[i]!;
             this.lines.show([win.lineIndex], this.timing.lineDrawSec);
@@ -53,6 +70,7 @@ export class WinPresenter {
 
     clear(): void {
         this.stopCycle();
+        this.mode = 'none';
         this.lines.hide();
         this.symbols.hide();
         this.reels.clearHighlight();

@@ -13,11 +13,12 @@ interface GameModelEvents {
     betChanged: [bet: number];
     stateChanged: [state: GameState];
     turboChanged: [turbo: boolean];
+    mutedChanged: [muted: boolean];
     winChanged: [win: number];
 }
 
 /**
- * Состояние клиента: баланс, ставка, текущее состояние игры, выбор игрока (turbo).
+ * Состояние клиента: баланс, ставка, текущее состояние игры, выбор игрока (turbo, звук).
  * Без Pixi и без логики сценария.
  * UI подписывается на события и перерисовывается сам: баланс в панели меняется только
  * через модель — так он не может разойтись с тем, что знает игра.
@@ -28,6 +29,7 @@ export class GameModel extends EventEmitter<GameModelEvents> {
     private bets: readonly number[] = [];
     private betIndex = 0;
     private _turbo = false;
+    private _muted = false;
     private _win = 0;
 
     get balance(): number {
@@ -70,6 +72,17 @@ export class GameModel extends EventEmitter<GameModelEvents> {
         if (value === this._win) return;
         this._win = value;
         this.emit('winChanged', value);
+    }
+
+    /** Выбор игрока: звук выключен. Как глушить — решает GameAudio. */
+    get muted(): boolean {
+        return this._muted;
+    }
+
+    set muted(value: boolean) {
+        if (value === this._muted) return;
+        this._muted = value;
+        this.emit('mutedChanged', value);
     }
 
     get bet(): number {

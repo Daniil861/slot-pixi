@@ -59,6 +59,11 @@ const SINGLE_FILES = [
     'ui/logo.png',
 ];
 
+// 4. Звуки — как есть: art-src/sounds/* → public/assets/sounds/.
+for (const name of readdirSync('art-src/sounds')) {
+    SINGLE_FILES.push(`sounds/${name}`);
+}
+
 for (const file of SINGLE_FILES) {
     const target = join(OUT, file);
     mkdirSync(dirname(target), { recursive: true });

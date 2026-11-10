@@ -26,6 +26,7 @@ export const BUTTON_COLUMN_Y = Object.freeze({
     spin: DESIGN_HEIGHT / 2,
     turbo: DESIGN_HEIGHT / 2 + 160,
     bet: DESIGN_HEIGHT / 2 + 260,
+    sound: DESIGN_HEIGHT / 2 + 360,
 });
 
 /** Экран загрузки: Y центра логотипа и Y верха прогресс-бара. */

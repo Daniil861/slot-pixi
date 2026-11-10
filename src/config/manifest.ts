@@ -1,4 +1,5 @@
 import type { AssetsManifest } from 'pixi.js';
+import { AUDIO } from './audio';
 import { SYMBOL_SPINE } from './spine';
 
 /**
@@ -28,7 +29,15 @@ export const manifest: AssetsManifest = {
                 { alias: SYMBOL_SPINE.atlasAlias, src: 'symbols.atlas' },
                 // JSON-скелет: загрузчик Spine узнаёт его по полю bones (спрайтшит — по frames/meta).
                 { alias: SYMBOL_SPINE.skeletonAlias, src: 'spine/symbol.json' },
+                // Короткие звуки — в бандле игры: нужны с первого спина. Загрузчик @pixi/sound кладёт их
+                // в библиотеку sound под алиасом (sound.play(alias)).
+                ...[AUDIO.spin, AUDIO.reelStop, AUDIO.win].map(({ alias, src }) => ({ alias, src })),
             ],
+        },
+        {
+            // Музыка (~2.7 МБ) — отдельно: грузится после показа игры и не задерживает старт.
+            name: AUDIO.musicBundle,
+            assets: [{ alias: AUDIO.music.alias, src: AUDIO.music.src }],
         },
     ],
 };

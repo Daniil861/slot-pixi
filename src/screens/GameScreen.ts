@@ -1,5 +1,7 @@
 import { gsap } from 'gsap';
-import { Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
+import { Assets, Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
+import { GameAudio } from '../audio/GameAudio';
+import { AUDIO } from '../config/audio';
 import {
     BUTTON_COLUMN_Y,
     DESIGN_HEIGHT,
@@ -13,7 +15,12 @@ import {
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
 import { SYMBOL_SPINE } from '../config/spine';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON, SYMBOL_PLACEHOLDER, UI_FONT, VALUE_FIELD, WIN_FIELD } from '../config/ui';
-import { NORMAL_WINS_TIMING, SYMBOL_HIGHLIGHT_STYLE, TURBO_WINS_TIMING, WIN_LINES_STYLE } from '../config/wins';
+import {
+    NORMAL_WINS_TIMING,
+    SYMBOL_HIGHLIGHT_STYLE,
+    TURBO_WINS_TIMING,
+    WIN_LINES_STYLE,
+} from '../config/wins';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 import { GameController, type GameView } from '../game/GameController';
@@ -49,6 +56,8 @@ export class GameScreen extends Container implements Screen {
     private readonly spinButton = new Button(PRIMARY_BUTTON, 'SPIN');
     private readonly turboButton = new Button(SECONDARY_BUTTON, 'TURBO');
     private readonly betButton = new Button(SECONDARY_BUTTON, 'BET');
+    private readonly soundButton = new Button(SECONDARY_BUTTON, 'SOUND');
+    private readonly audio = new GameAudio(AUDIO);
     // Поля создаются в конструкторе: до первого BitmapText должен быть установлен шрифт.
     private readonly balanceField: ValueField;
     private readonly winField: ValueField;
@@ -93,8 +102,12 @@ export class GameScreen extends Container implements Screen {
             startSpin: () => {
                 this.winPresenter.clear();
                 this.reels.startSpin();
+                this.audio.spinStarted();
             },
-            stopOn: (grid) => this.reels.stopOn(grid),
+            stopOn: async (grid) => {
+                await this.reels.stopOn(grid);
+                this.audio.spinFinished();
+            },
             quickStop: () => this.reels.quickStop(),
             showWins: (wins, totalWin) => this.showWins(wins, totalWin),
             skipWins: () => this.skipWins(),
@@ -106,12 +119,19 @@ export class GameScreen extends Container implements Screen {
         this.spinButton.position.set(columnX, BUTTON_COLUMN_Y.spin);
         this.turboButton.position.set(columnX, BUTTON_COLUMN_Y.turbo);
         this.betButton.position.set(columnX, BUTTON_COLUMN_Y.bet);
-        this.content.addChild(this.spinButton, this.turboButton, this.betButton);
+        this.soundButton.position.set(columnX, BUTTON_COLUMN_Y.sound);
+        this.content.addChild(this.spinButton, this.turboButton, this.betButton, this.soundButton);
 
         // Ввод → контроллер / модель. Кнопка не решает, можно ли крутить: это проверяет контроллер.
         this.spinButton.onPress = () => this.controller.pressSpin();
         this.turboButton.onPress = () => (this.model.turbo = !this.model.turbo);
         this.betButton.onPress = () => this.model.nextBet();
+        this.soundButton.onPress = () => (this.model.muted = !this.model.muted);
+
+        // Отображение → звук: моменты, которые знают только view.
+        this.reels.onReelStop = () => this.audio.reelStopped();
+        // Звук выигрыша — только на показе всех линий; при переборе линий WinPresenter его не отдаёт.
+        this.winPresenter.onWinImpact = () => this.audio.winImpact();
 
         // Модель → отображение.
         this.model.on('balanceChanged', this.onBalanceChanged, this);
@@ -119,12 +139,19 @@ export class GameScreen extends Container implements Screen {
         this.model.on('winChanged', this.onWinChanged, this);
         this.model.on('turboChanged', this.onTurboChanged, this);
         this.model.on('stateChanged', this.updateButtons, this);
+        this.model.on('mutedChanged', this.onMutedChanged, this);
         this.updateButtons();
         this.onTurboChanged();
+        this.onMutedChanged();
     }
 
     async show(): Promise<void> {
         await this.controller.init();
+        // Музыку не ждём: бандл грузится, пока игрок уже крутит. Промис loadBundle без await — загрузка
+        // идёт параллельно (Assets.backgroundLoadBundle — то же, но с низким приоритетом, «про запас»).
+        void Assets.loadBundle(AUDIO.musicBundle).then(() => {
+            if (!this.destroyed) this.audio.startMusic();
+        });
     }
 
     /** Вызывается каждый кадр: Navigation подписал этот метод на app.ticker. */
@@ -150,6 +177,8 @@ export class GameScreen extends Container implements Screen {
         this.model.off('winChanged', this.onWinChanged, this);
         this.model.off('turboChanged', this.onTurboChanged, this);
         this.model.off('stateChanged', this.updateButtons, this);
+        this.model.off('mutedChanged', this.onMutedChanged, this);
+        this.audio.destroy();
         this.winHold?.kill();
         this.winPresenter.destroy();
         super.destroy(options);
@@ -168,6 +197,11 @@ export class GameScreen extends Container implements Screen {
         this.reels.setTiming(this.currentTiming());
         this.winPresenter.setTiming(this.currentWinsTiming());
         this.turboButton.text = this.model.turbo ? 'TURBO ON' : 'TURBO';
+    }
+
+    private onMutedChanged(): void {
+        this.audio.setMuted(this.model.muted);
+        this.soundButton.text = this.model.muted ? 'SOUND OFF' : 'SOUND';
     }
 
     /** Баланс показываем сразу: и списание ставки, и начисление после показа выигрыша — без прокрутки. */

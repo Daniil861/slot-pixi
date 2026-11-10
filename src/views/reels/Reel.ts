@@ -33,6 +33,9 @@ interface Landing {
  * Локальные координаты: (0, 0) — левый верхний угол ячейки первого ряда, ширина CELL_SIZE.
  */
 export class Reel extends Container {
+    /** Барабан «ударился» о цель: конец торможения, перед возвратом bounce. Для звука остановки. */
+    onLanded: (() => void) | undefined;
+
     private readonly sprites: Sprite[] = [];
     /** Не `position`: это имя уже занято у Container (координаты объекта). */
     private offset = 0;
@@ -178,6 +181,8 @@ export class Reel extends Container {
             .timeline({ onUpdate: () => this.layout(true), onComplete: () => this.finishLanding(target) })
             // Торможение с проездом за цель...
             .to(this, { offset: overshoot, duration, ease: 'power1.out' })
+            // call в таймлайне — колбэк в точке между твинами (как CallFunc в sequence у Cocos).
+            .call(() => this.onLanded?.())
             // ...и возврат назад — bounce.
             .to(this, { offset: target, duration: bounceBackSec, ease: 'power1.inOut' });
     }
@@ -200,6 +205,7 @@ export class Reel extends Container {
         this.landingTimeline = gsap
             .timeline({ onUpdate: () => this.layout(true), onComplete: () => this.finishLanding(0) })
             .to(this, { offset: bounceCells, duration: quickStopSec, ease: 'power1.out' })
+            .call(() => this.onLanded?.())
             .to(this, { offset: 0, duration: bounceBackSec, ease: 'power1.inOut' });
     }
 

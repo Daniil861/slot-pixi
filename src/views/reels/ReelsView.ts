@@ -16,6 +16,9 @@ import type { SymbolTextures } from './SymbolTextures';
  * Локальные координаты: (0, 0) — левый верхний угол окна барабанов, окно 1000×600.
  */
 export class ReelsView extends Container {
+    /** Барабан reelIndex остановился (момент удара, до bounce). */
+    onReelStop: ((reelIndex: number) => void) | undefined;
+
     private readonly reels: Reel[] = [];
     private readonly symbolsLayer = new Container();
     /** Время с начала вращения — по ticker, а не по setTimeout: на неактивной вкладке ticker стоит вместе с анимацией. */
@@ -53,6 +56,7 @@ export class ReelsView extends Container {
         for (let i = 0; i < REEL_COUNT; i++) {
             const reel = new Reel(textures, timing, highlightStyle);
             reel.x = i * CELL_SIZE;
+            reel.onLanded = () => this.onReelStop?.(i);
             this.symbolsLayer.addChild(reel);
             this.reels.push(reel);
         }

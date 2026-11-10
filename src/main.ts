@@ -2,6 +2,8 @@
 // Импорт ради побочного эффекта: пакет регистрирует в Assets загрузчики .atlas и скелетов Spine
 // (extensions.add). Должен выполниться до загрузки бандла с этими файлами.
 import '@esotericsoftware/spine-pixi-v8';
+// То же для звука: загрузчик .ogg/.mp3/... в Assets.
+import '@pixi/sound';
 import { manifest } from './config/manifest';
 import { Engine } from './engine/Engine';
 import { GameModel } from './game/GameModel';
