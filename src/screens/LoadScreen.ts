@@ -1,11 +1,11 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../config/layout';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, LOADING_BAR_Y, LOGO_Y } from '../config/layout';
+import { LOADING_BAR } from '../config/ui';
 import { fitContain } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 
-const BAR_WIDTH = 600;
-const BAR_HEIGHT = 24;
-const BAR_RADIUS = BAR_HEIGHT / 2;
+/** Скругление на всю высоту — «таблетка». Следует из формы, а не настройка. */
+const BAR_RADIUS = LOADING_BAR.height / 2;
 
 /** Экран загрузки: логотип + прогресс-бар на Graphics. Прогресс приходит из Navigation через onLoad. */
 export class LoadScreen extends Container implements Screen {
@@ -17,7 +17,7 @@ export class LoadScreen extends Container implements Screen {
     private readonly fill = new Graphics();
     private readonly percentText = new Text({
         text: '0%',
-        style: { fontFamily: 'Arial', fontSize: 28, fill: 0xf5d27a },
+        style: { fontFamily: LOADING_BAR.percentFontFamily, fontSize: LOADING_BAR.percentFontSize, fill: LOADING_BAR.color },
     });
 
     constructor() {
@@ -27,20 +27,21 @@ export class LoadScreen extends Container implements Screen {
         // Логотип уже в кэше: бандл 'loading' загружен до вызова конструктора.
         const logo = Sprite.from('logo');
         logo.anchor.set(0.5);
-        logo.position.set(DESIGN_WIDTH / 2, DESIGN_HEIGHT * 0.4);
+        logo.position.set(DESIGN_WIDTH / 2, LOGO_Y);
         this.content.addChild(logo);
 
+        const { width, height } = LOADING_BAR;
         const track = new Graphics()
-            .roundRect(0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_RADIUS)
-            .fill({ color: 0x000000, alpha: 0.5 })
-            .stroke({ width: 2, color: 0xf5d27a });
+            .roundRect(0, 0, width, height, BAR_RADIUS)
+            .fill({ color: LOADING_BAR.trackColor, alpha: LOADING_BAR.trackAlpha })
+            .stroke({ width: LOADING_BAR.strokeWidth, color: LOADING_BAR.color });
 
         const bar = new Container();
-        bar.position.set((DESIGN_WIDTH - BAR_WIDTH) / 2, DESIGN_HEIGHT * 0.72);
+        bar.position.set((DESIGN_WIDTH - width) / 2, LOADING_BAR_Y);
         bar.addChild(track, this.fill);
 
         this.percentText.anchor.set(0.5, 0);
-        this.percentText.position.set(BAR_WIDTH / 2, BAR_HEIGHT + 16);
+        this.percentText.position.set(width / 2, height + LOADING_BAR.percentGap);
         bar.addChild(this.percentText);
 
         this.content.addChild(bar);
@@ -54,9 +55,10 @@ export class LoadScreen extends Container implements Screen {
         // Событий прогресса единицы (по одному на файл), так что это дёшево.
         // Альтернатива — рисовать один раз и менять scale.x, но тогда сплющатся скругления.
         this.fill.clear();
-        const width = BAR_WIDTH * p;
-        if (width >= BAR_HEIGHT) {
-            this.fill.roundRect(0, 0, width, BAR_HEIGHT, BAR_RADIUS).fill(0xf5d27a);
+        const width = LOADING_BAR.width * p;
+        // Уже высоты бар не рисуем: скругление на всю высоту не поместится.
+        if (width >= LOADING_BAR.height) {
+            this.fill.roundRect(0, 0, width, LOADING_BAR.height, BAR_RADIUS).fill(LOADING_BAR.color);
         }
         this.percentText.text = `${Math.round(p * 100)}%`;
     }

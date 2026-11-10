@@ -1,31 +1,12 @@
 import { Container, Graphics, GraphicsContext, Rectangle, Text, type DestroyOptions } from 'pixi.js';
-
-export type ButtonState = 'normal' | 'hover' | 'pressed' | 'disabled';
-
-export interface ButtonOptions {
-    width: number;
-    height: number;
-    text: string;
-    fontSize?: number;
-    /** Цвета заливки по состояниям. */
-    colors?: Partial<Record<ButtonState, number>>;
-}
-
-const DEFAULT_COLORS: Record<ButtonState, number> = {
-    normal: 0x2e7d32,
-    hover: 0x43a047,
-    pressed: 0x1b5e20,
-    disabled: 0x555555,
-};
-
-/** Насколько кнопка «вдавливается» при нажатии. */
-const PRESSED_SCALE = 0.95;
+import type { ButtonState, ButtonStyle } from '../../config/ui';
 
 /**
  * Кнопка: фон на Graphics + надпись Text, четыре состояния.
  * Аналог компонента Button в Cocos, но в Pixi готового нет — состояния собираем из pointer-событий.
  *
  * Точка (0, 0) — центр кнопки: так scale при нажатии сжимает её к центру, а не к левому верхнему углу.
+ * Размер, цвета и шрифт — пресет ButtonStyle из config/ui.ts.
  */
 export class Button extends Container {
     /** Колбэк нажатия. Вызывается на pointertap: down и up над кнопкой — как click, но и для touch. */
@@ -43,17 +24,19 @@ export class Button extends Container {
     private isOver = false;
     private isDown = false;
 
-    constructor(options: ButtonOptions) {
+    constructor(
+        private readonly style: ButtonStyle,
+        text: string,
+    ) {
         super();
-        const { width, height } = options;
-        const colors = { ...DEFAULT_COLORS, ...options.colors };
-        const radius = Math.min(width, height) * 0.25;
+        const { width, height, colors, strokeWidth, strokeColor } = style;
+        const radius = Math.min(width, height) * style.cornerRatio;
 
         const draw = (color: number) =>
             new GraphicsContext()
                 .roundRect(-width / 2, -height / 2, width, height, radius)
                 .fill(color)
-                .stroke({ width: 4, color: 0xf5d27a });
+                .stroke({ width: strokeWidth, color: strokeColor });
         this.contexts = {
             normal: draw(colors.normal),
             hover: draw(colors.hover),
@@ -63,8 +46,8 @@ export class Button extends Container {
 
         this.background = new Graphics(this.contexts.normal);
         this.labelText = new Text({
-            text: options.text,
-            style: { fontFamily: 'Arial', fontSize: options.fontSize ?? 40, fontWeight: 'bold', fill: 0xffffff },
+            text,
+            style: { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: 'bold', fill: style.textColor },
         });
         this.labelText.anchor.set(0.5);
         this.addChild(this.background, this.labelText);
@@ -156,7 +139,7 @@ export class Button extends Container {
     private refresh(): void {
         const state = this.state;
         this.background.context = this.contexts[state];
-        this.scale.set(state === 'pressed' ? PRESSED_SCALE : 1);
-        this.labelText.alpha = state === 'disabled' ? 0.5 : 1;
+        this.scale.set(state === 'pressed' ? this.style.pressedScale : 1);
+        this.labelText.alpha = state === 'disabled' ? this.style.disabledTextAlpha : 1;
     }
 }

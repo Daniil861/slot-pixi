@@ -1,17 +1,11 @@
 import { gsap } from 'gsap';
 import { BitmapText, Container, type DestroyOptions } from 'pixi.js';
-import { UI_FONT } from './fonts';
-
-export interface ValueFieldOptions {
-    title: string;
-    titleSize?: number;
-    valueSize?: number;
-    valueColor?: number;
-}
+import type { ValueFieldStyle } from '../../config/ui';
 
 /**
  * Поле панели: подпись (BALANCE / BET / WIN) и число под ней. Обе строки — BitmapText одного шрифта,
- * цвет — через tint. (0, 0) — центр по горизонтали, верх подписи.
+ * цвет — через tint. (0, 0) — центр по горизонтали, верх подписи. Размеры и цвета — пресет ValueFieldStyle.
+ * Bitmap-шрифт style.fontFamily должен быть установлен до создания поля (installBitmapFont).
  *
  * setValue(value, durationSec) — rolling counter: показанное число твинится от текущего к новому.
  */
@@ -23,22 +17,22 @@ export class ValueField extends Container {
     private tween: gsap.core.Tween | undefined;
     private finishTween: (() => void) | undefined;
 
-    constructor(options: ValueFieldOptions) {
+    constructor(style: ValueFieldStyle, title: string) {
         super();
         this.titleText = new BitmapText({
-            text: options.title,
-            style: { fontFamily: UI_FONT, fontSize: options.titleSize ?? 26 },
+            text: title,
+            style: { fontFamily: style.fontFamily, fontSize: style.titleSize },
         });
-        this.titleText.tint = 0xc9b07a;
+        this.titleText.tint = style.titleColor;
         this.titleText.anchor.set(0.5, 0);
 
         this.valueText = new BitmapText({
             text: '0',
-            style: { fontFamily: UI_FONT, fontSize: options.valueSize ?? 48 },
+            style: { fontFamily: style.fontFamily, fontSize: style.valueSize },
         });
-        this.valueText.tint = options.valueColor ?? 0xffffff;
+        this.valueText.tint = style.valueColor;
         this.valueText.anchor.set(0.5, 0);
-        this.valueText.y = this.titleText.height + 4;
+        this.valueText.y = this.titleText.height + style.gap;
 
         this.addChild(this.titleText, this.valueText);
     }

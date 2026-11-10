@@ -1,4 +1,5 @@
 import { BitmapFont } from 'pixi.js';
+import type { BitmapFontStyle } from '../../config/ui';
 
 /**
  * Bitmap-шрифты UI. Имя шрифта = fontFamily в стиле BitmapText.
@@ -8,37 +9,34 @@ import { BitmapFont } from 'pixi.js';
  * строку из готовых глифов одной текстуры-атласа: смена текста — только пересчёт квадов.
  * Аналог в Cocos — Label с BMFont.
  */
-export const UI_FONT = 'UiFont';
-
-/** Размер, в котором глифы растеризуются. BitmapText другого fontSize масштабирует их. */
-const BASE_SIZE = 64;
-
-let installed = false;
+const installed = new Set<string>();
 
 /**
- * Генерирует атлас глифов из системного шрифта в рантайме (без .fnt-файла).
+ * Генерирует атлас глифов из системного шрифта в рантайме (без .fnt-файла). Параметры — пресет из config/ui.ts.
+ * Имя шрифта (style.name) потом указывают как fontFamily в стиле BitmapText.
  * Белая заливка без stroke — Pixi помечает шрифт как перекрашиваемый: цвет поля задаётся через tint,
  * и одного атласа хватает на все цвета. С обводкой или градиентом пришлось бы ставить шрифт на каждый цвет.
  *
- * Install один раз: повторный с тем же именем перезапишет запись в Cache с предупреждением.
+ * Install один раз на имя: повторный с тем же именем перезапишет запись в Cache с предупреждением.
  */
-export function installFonts(): void {
-    if (installed) return;
-    installed = true;
+export function installBitmapFont(style: BitmapFontStyle): void {
+    if (installed.has(style.name)) return;
+    installed.add(style.name);
 
     BitmapFont.install({
-        name: UI_FONT,
+        name: style.name,
         style: {
-            fontFamily: 'Arial',
-            fontSize: BASE_SIZE,
-            fontWeight: 'bold',
+            fontFamily: style.sourceFamily,
+            fontSize: style.baseSize,
+            fontWeight: style.fontWeight,
+            // Белая заливка — условие перекраски через tint, поэтому она не настраивается.
             fill: 0xffffff,
-            // Чёрная тень не мешает tint (тень — не fill), зато цифры читаются на любом фоне.
-            dropShadow: { color: 0x000000, alpha: 0.6, distance: 3, blur: 2, angle: Math.PI / 2 },
+            // Тень не мешает tint, если она чёрная (тень — не fill), зато цифры читаются на любом фоне.
+            dropShadow: { ...style.shadow },
         },
         // Только нужные символы: меньше атлас. Пробел — обязательно, иначе он не отрисуется.
-        chars: [['0', '9'], ['A', 'Z'], ' .,'],
-        // Глифы с запасом по чёткости: content масштабируется под окно, на HiDPI — ещё и resolution 2.
-        resolution: 2,
+        chars: style.chars.map((c) => (typeof c === 'string' ? c : [...c])),
+        // Глифы с запасом по чёткости: content масштабируется под окно, на HiDPI — ещё и resolution renderer.
+        resolution: style.resolution,
     });
 }

@@ -1,7 +1,17 @@
 import { gsap } from 'gsap';
 import { Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, FRAME_BORDER, REELS_HEIGHT, REELS_WIDTH } from '../config/layout';
+import {
+    BUTTON_COLUMN_Y,
+    DESIGN_HEIGHT,
+    DESIGN_WIDTH,
+    FRAME_BORDER,
+    PANEL_FIELD_X,
+    PANEL_GAP,
+    REELS_HEIGHT,
+    REELS_WIDTH,
+} from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
+import { PRIMARY_BUTTON, SECONDARY_BUTTON, SYMBOL_PLACEHOLDER, UI_FONT, VALUE_FIELD, WIN_FIELD } from '../config/ui';
 import { NORMAL_WINS_TIMING, SYMBOL_HIGHLIGHT_STYLE, TURBO_WINS_TIMING, WIN_LINES_STYLE } from '../config/wins';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
@@ -11,13 +21,10 @@ import type { LineWin, RgsClient } from '../server/RgsClient';
 import { ReelsView } from '../views/reels/ReelsView';
 import { SymbolTextures } from '../views/reels/SymbolTextures';
 import { Button } from '../views/ui/Button';
-import { installFonts } from '../views/ui/fonts';
+import { installBitmapFont } from '../views/ui/fonts';
 import { ValueField } from '../views/ui/ValueField';
 import { WinLinesView } from '../views/wins/WinLinesView';
 import { WinPresenter } from '../views/wins/WinPresenter';
-
-/** Цвета второстепенных кнопок (Turbo, Bet). */
-const SECONDARY_COLORS = { normal: 0x37474f, hover: 0x546e7a, pressed: 0x263238 };
 
 /**
  * Игровой экран: создаёт view, раскладывает их и связывает с контроллером.
@@ -36,9 +43,9 @@ export class GameScreen extends Container implements Screen {
     private readonly winLines = new WinLinesView(WIN_LINES_STYLE);
     private readonly winPresenter: WinPresenter;
     private readonly controller: GameController;
-    private readonly spinButton = new Button({ width: 240, height: 140, text: 'SPIN', fontSize: 52 });
-    private readonly turboButton = new Button({ width: 200, height: 80, text: 'TURBO', fontSize: 32, colors: SECONDARY_COLORS });
-    private readonly betButton = new Button({ width: 200, height: 80, text: 'BET', fontSize: 32, colors: SECONDARY_COLORS });
+    private readonly spinButton = new Button(PRIMARY_BUTTON, 'SPIN');
+    private readonly turboButton = new Button(SECONDARY_BUTTON, 'TURBO');
+    private readonly betButton = new Button(SECONDARY_BUTTON, 'BET');
     // Поля создаются в конструкторе: до первого BitmapText должен быть установлен шрифт.
     private readonly balanceField: ValueField;
     private readonly winField: ValueField;
@@ -53,7 +60,7 @@ export class GameScreen extends Container implements Screen {
         this.background.anchor.set(0.5);
         this.addChild(this.background, this.content);
 
-        this.reels = new ReelsView(new SymbolTextures(renderer), this.currentTiming(), SYMBOL_HIGHLIGHT_STYLE);
+        this.reels = new ReelsView(new SymbolTextures(renderer, SYMBOL_PLACEHOLDER), this.currentTiming(), SYMBOL_HIGHLIGHT_STYLE);
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
         // Линии — поверх рамки (добавлены позже), в координатах окна барабанов.
@@ -62,16 +69,16 @@ export class GameScreen extends Container implements Screen {
         this.winPresenter = new WinPresenter(this.reels, this.winLines, this.currentWinsTiming());
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
-        // из стиля BitmapText, а системного шрифта 'UiFont' нет — получится шрифт по умолчанию.
-        installFonts();
-        this.balanceField = new ValueField({ title: 'BALANCE' });
-        this.winField = new ValueField({ title: 'WIN', valueSize: 56, valueColor: 0xf5d27a });
-        this.betField = new ValueField({ title: 'BET' });
+        // из стиля BitmapText, а системного шрифта с таким именем нет — получится шрифт по умолчанию.
+        installBitmapFont(UI_FONT);
+        this.balanceField = new ValueField(VALUE_FIELD, 'BALANCE');
+        this.winField = new ValueField(WIN_FIELD, 'WIN');
+        this.betField = new ValueField(VALUE_FIELD, 'BET');
         // Панель под рамкой: баланс слева, выигрыш по центру, ставка справа.
-        const panelY = this.reels.y + REELS_HEIGHT + FRAME_BORDER + 20;
-        this.balanceField.position.set(this.reels.x + REELS_WIDTH * 0.15, panelY);
-        this.winField.position.set(this.reels.x + REELS_WIDTH * 0.5, panelY);
-        this.betField.position.set(this.reels.x + REELS_WIDTH * 0.85, panelY);
+        const panelY = this.reels.y + REELS_HEIGHT + FRAME_BORDER + PANEL_GAP;
+        this.balanceField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.balance, panelY);
+        this.winField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.win, panelY);
+        this.betField.position.set(this.reels.x + REELS_WIDTH * PANEL_FIELD_X.bet, panelY);
         this.content.addChild(this.balanceField, this.winField, this.betField);
 
         // GameView собирается из нескольких view: контроллер не знает, кто что показывает.
@@ -91,9 +98,9 @@ export class GameScreen extends Container implements Screen {
 
         // Кнопки справа от поля, по центру свободной полосы между рамкой и краем дизайн-области.
         const columnX = (this.reels.x + REELS_WIDTH + FRAME_BORDER + DESIGN_WIDTH) / 2;
-        this.spinButton.position.set(columnX, DESIGN_HEIGHT / 2);
-        this.turboButton.position.set(columnX, DESIGN_HEIGHT / 2 + 160);
-        this.betButton.position.set(columnX, DESIGN_HEIGHT / 2 + 260);
+        this.spinButton.position.set(columnX, BUTTON_COLUMN_Y.spin);
+        this.turboButton.position.set(columnX, BUTTON_COLUMN_Y.turbo);
+        this.betButton.position.set(columnX, BUTTON_COLUMN_Y.bet);
         this.content.addChild(this.spinButton, this.turboButton, this.betButton);
 
         // Ввод → контроллер / модель. Кнопка не решает, можно ли крутить: это проверяет контроллер.
