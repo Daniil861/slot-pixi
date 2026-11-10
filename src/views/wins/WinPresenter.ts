@@ -1,7 +1,5 @@
-
-/** Сколько показывается каждая линия при переборе в idle. */
-const CYCLE_LINE_SEC = 1.2;
 import { gsap } from 'gsap';
+import type { WinsTiming } from '../../config/wins';
 import type { LineWin } from '../../server/RgsClient';
 import type { ReelsView } from '../reels/ReelsView';
 import type { WinLinesView } from './WinLinesView';
@@ -19,11 +17,17 @@ export class WinPresenter {
     constructor(
         private readonly reels: ReelsView,
         private readonly lines: WinLinesView,
+        private timing: WinsTiming,
     ) {}
+
+    /** Сменить тайминги (turbo). Идущая прорисовка доигрывается со старыми, перебор подхватит новые на следующей линии. */
+    setTiming(timing: WinsTiming): void {
+        this.timing = timing;
+    }
 
     showAll(wins: readonly LineWin[]): void {
         this.stopCycle();
-        this.lines.show(wins.map((w) => w.lineIndex));
+        this.lines.show(wins.map((w) => w.lineIndex), this.timing.lineDrawSec);
         this.reels.highlight(wins.flatMap((w) => w.positions));
     }
 
@@ -33,10 +37,10 @@ export class WinPresenter {
         if (wins.length < 2) return;
         const step = (i: number) => {
             const win = wins[i]!;
-            this.lines.show([win.lineIndex]);
+            this.lines.show([win.lineIndex], this.timing.lineDrawSec);
             this.reels.highlight(win.positions);
             // delayedCall идёт по часам GSAP (= app.ticker): на неактивной вкладке перебор стоит.
-            this.cycleCall = gsap.delayedCall(CYCLE_LINE_SEC, () => step((i + 1) % wins.length));
+            this.cycleCall = gsap.delayedCall(this.timing.cycleLineSec, () => step((i + 1) % wins.length));
         };
         step(0);
     }

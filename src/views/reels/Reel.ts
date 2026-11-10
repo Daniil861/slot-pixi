@@ -1,14 +1,9 @@
-
-/** Затемнение невыигрышных символов при показе выигрыша. tint умножает цвет текстуры, белый — без изменений. */
-const DIM_TINT = 0x666666;
-/** Пульсация выигрышного символа: во сколько раз растёт и за сколько секунд (в одну сторону). */
-const PULSE_SCALE = 1.15;
-const PULSE_SEC = 0.35;
 import { gsap } from 'gsap';
 import { Container, Sprite, type DestroyOptions } from 'pixi.js';
 import { ROW_COUNT, randomSymbolId, type SymbolId } from '../../config/game';
 import { CELL_SIZE, SYMBOL_SIZE } from '../../config/layout';
 import type { ReelsTiming } from '../../config/reels';
+import type { SymbolHighlightStyle } from '../../config/wins';
 import type { SymbolTextures } from './SymbolTextures';
 
 /**
@@ -53,6 +48,7 @@ export class Reel extends Container {
     constructor(
         private readonly textures: SymbolTextures,
         private timing: ReelsTiming,
+        private readonly highlightStyle: SymbolHighlightStyle,
     ) {
         super();
         for (let i = 0; i < STRIP_LENGTH; i++) {
@@ -75,7 +71,8 @@ export class Reel extends Container {
      */
     highlight(rows: readonly number[]): void {
         this.clearHighlight();
-        this.sprites.forEach((sprite) => (sprite.tint = DIM_TINT));
+        const { dimTint, pulseScale, pulseSec } = this.highlightStyle;
+        this.sprites.forEach((sprite) => (sprite.tint = dimTint));
         for (const row of rows) {
             const sprite = this.spriteAtRow(row);
             sprite.tint = 0xffffff;
@@ -84,9 +81,9 @@ export class Reel extends Container {
             sprite.zIndex = 1;
             const base = sprite.scale.x;
             gsap.to(sprite.scale, {
-                x: base * PULSE_SCALE,
-                y: base * PULSE_SCALE,
-                duration: PULSE_SEC,
+                x: base * pulseScale,
+                y: base * pulseScale,
+                duration: pulseSec,
                 ease: 'sine.inOut',
                 yoyo: true,
                 repeat: -1,

@@ -2,6 +2,7 @@ import { gsap } from 'gsap';
 import { Container, Sprite, type DestroyOptions, type Renderer, type Ticker } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH, FRAME_BORDER, REELS_HEIGHT, REELS_WIDTH } from '../config/layout';
 import { NORMAL_TIMING, TURBO_TIMING } from '../config/reels';
+import { NORMAL_WINS_TIMING, SYMBOL_HIGHLIGHT_STYLE, TURBO_WINS_TIMING, WIN_LINES_STYLE } from '../config/wins';
 import { fitContain, fitCover } from '../engine/layout';
 import type { Screen } from '../engine/Screen';
 import { GameController, type GameView } from '../game/GameController';
@@ -32,7 +33,7 @@ export class GameScreen extends Container implements Screen {
     private readonly background = Sprite.from('background');
     private readonly content = new Container();
     private readonly reels: ReelsView;
-    private readonly winLines = new WinLinesView();
+    private readonly winLines = new WinLinesView(WIN_LINES_STYLE);
     private readonly winPresenter: WinPresenter;
     private readonly controller: GameController;
     private readonly spinButton = new Button({ width: 240, height: 140, text: 'SPIN', fontSize: 52 });
@@ -52,13 +53,13 @@ export class GameScreen extends Container implements Screen {
         this.background.anchor.set(0.5);
         this.addChild(this.background, this.content);
 
-        this.reels = new ReelsView(new SymbolTextures(renderer), this.currentTiming());
+        this.reels = new ReelsView(new SymbolTextures(renderer), this.currentTiming(), SYMBOL_HIGHLIGHT_STYLE);
         this.reels.position.set((DESIGN_WIDTH - REELS_WIDTH) / 2, (DESIGN_HEIGHT - REELS_HEIGHT) / 2);
         this.content.addChild(this.reels);
         // Линии — поверх рамки (добавлены позже), в координатах окна барабанов.
         this.winLines.position.copyFrom(this.reels.position);
         this.content.addChild(this.winLines);
-        this.winPresenter = new WinPresenter(this.reels, this.winLines);
+        this.winPresenter = new WinPresenter(this.reels, this.winLines, this.currentWinsTiming());
 
         // Шрифт — до первого BitmapText с этим fontFamily. Иначе Pixi сгенерирует динамический шрифт
         // из стиля BitmapText, а системного шрифта 'UiFont' нет — получится шрифт по умолчанию.
@@ -141,13 +142,18 @@ export class GameScreen extends Container implements Screen {
         super.destroy(options);
     }
 
-    /** Выбор игрока → пресет таймингов. Сами барабаны о режимах не знают. */
+    /** Выбор игрока → пресет таймингов. Сами барабаны и показ выигрыша о режимах не знают. */
     private currentTiming() {
         return this.model.turbo ? TURBO_TIMING : NORMAL_TIMING;
     }
 
+    private currentWinsTiming() {
+        return this.model.turbo ? TURBO_WINS_TIMING : NORMAL_WINS_TIMING;
+    }
+
     private onTurboChanged(): void {
         this.reels.setTiming(this.currentTiming());
+        this.winPresenter.setTiming(this.currentWinsTiming());
         this.turboButton.text = this.model.turbo ? 'TURBO ON' : 'TURBO';
     }
 
@@ -196,8 +202,8 @@ export class GameScreen extends Container implements Screen {
     }
 
     private async playWinCounter(totalWin: number): Promise<void> {
-        const turbo = this.model.turbo;
-        await this.winField.setValue(totalWin, turbo ? 0.4 : 1.2);
+        const { counterSec, holdSec } = this.currentWinsTiming();
+        await this.winField.setValue(totalWin, counterSec);
         if (this.winsSkipped) return;
         // Пауза — gsap.delayedCall, а не setTimeout: GSAP идёт от app.ticker и стоит вместе с игрой.
         await new Promise<void>((resolve) => {
@@ -207,7 +213,7 @@ export class GameScreen extends Container implements Screen {
                 this.finishWinHold = undefined;
                 resolve();
             };
-            this.winHold = gsap.delayedCall(turbo ? 0.3 : 0.8, this.finishWinHold);
+            this.winHold = gsap.delayedCall(holdSec, this.finishWinHold);
         });
     }
 

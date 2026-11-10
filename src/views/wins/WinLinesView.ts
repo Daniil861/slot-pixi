@@ -1,13 +1,8 @@
 import { gsap } from 'gsap';
 import { Container, Graphics, type DestroyOptions } from 'pixi.js';
 import { CELL_SIZE, REELS_WIDTH } from '../../config/layout';
+import type { WinLinesStyle } from '../../config/wins';
 import type { Payline } from '../../server/RgsClient';
-
-/** Цвета линий по индексу — у каждой линии свой, как в пэйтейбле. */
-const LINE_COLORS = [0xffd54f, 0x4fc3f7, 0xef5350, 0x81c784, 0xba68c8, 0xff8a65, 0x4db6ac, 0xf06292, 0xaed581, 0x7986cb];
-const LINE_WIDTH = 10;
-/** За сколько линия «прорисовывается» слева направо. */
-const DRAW_SEC = 0.4;
 
 interface Point {
     x: number;
@@ -39,7 +34,7 @@ export class WinLinesView extends Container {
     private readonly reveal = { progress: 1 };
     private revealTween: gsap.core.Tween | undefined;
 
-    constructor() {
+    constructor(private readonly style: WinLinesStyle) {
         super();
         this.addChild(this.graphics);
         // Линии — только картинка: не перехватывают клики и не участвуют в hit-test.
@@ -50,19 +45,23 @@ export class WinLinesView extends Container {
         this.paylines = paylines;
     }
 
-    /** Показать линии с указанными индексами, все одновременно прорисовываются слева направо. */
-    show(lineIndices: readonly number[]): void {
+    /**
+     * Показать линии с указанными индексами, все одновременно прорисовываются слева направо за drawSec.
+     * Длительность — параметр, а не стиль: она из пресета таймингов (turbo), см. WinPresenter.
+     */
+    show(lineIndices: readonly number[], drawSec: number): void {
         this.revealTween?.kill();
+        const { colors } = this.style;
         this.shown = lineIndices.flatMap((index) => {
             const line = this.paylines[index];
-            return line ? [toPolyline(line, LINE_COLORS[index % LINE_COLORS.length]!)] : [];
+            return line ? [toPolyline(line, colors[index % colors.length]!)] : [];
         });
 
         this.reveal.progress = 0;
         this.redraw();
         this.revealTween = gsap.to(this.reveal, {
             progress: 1,
-            duration: DRAW_SEC,
+            duration: drawSec,
             // Быстрый старт и мягкое «дотягивание» к правому краю.
             ease: 'power1.out',
             onUpdate: () => this.redraw(),
@@ -83,6 +82,7 @@ export class WinLinesView extends Container {
 
     private redraw(): void {
         const g = this.graphics.clear();
+        const { width, shadowExtraWidth, shadowColor, shadowAlpha } = this.style;
         for (const line of this.shown) {
             const length = line.cumulative[line.cumulative.length - 1]! * this.reveal.progress;
             if (length <= 0) continue;
@@ -90,9 +90,9 @@ export class WinLinesView extends Container {
             // прохода путь строим заново (повторно путь используется только в связке fill() → stroke()).
             // Тёмная подложка шире основной линии — линия читается поверх любых символов.
             tracePartial(g, line, length);
-            g.stroke({ width: LINE_WIDTH + 6, color: 0x000000, alpha: 0.5, cap: 'round', join: 'round' });
+            g.stroke({ width: width + shadowExtraWidth, color: shadowColor, alpha: shadowAlpha, cap: 'round', join: 'round' });
             tracePartial(g, line, length);
-            g.stroke({ width: LINE_WIDTH, color: line.color, cap: 'round', join: 'round' });
+            g.stroke({ width, color: line.color, cap: 'round', join: 'round' });
         }
     }
 }

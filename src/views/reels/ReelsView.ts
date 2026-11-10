@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { REEL_COUNT } from '../../config/game';
 import { CELL_SIZE, FRAME_BORDER, REELS_HEIGHT, REELS_WIDTH } from '../../config/layout';
 import type { ReelsTiming } from '../../config/reels';
+import type { SymbolHighlightStyle } from '../../config/wins';
 import type { Grid } from '../../server/RgsClient';
 import { Reel } from './Reel';
 import type { SymbolTextures } from './SymbolTextures';
@@ -27,6 +28,7 @@ export class ReelsView extends Container {
     constructor(
         textures: SymbolTextures,
         private timing: ReelsTiming,
+        highlightStyle: SymbolHighlightStyle,
     ) {
         super();
 
@@ -47,7 +49,7 @@ export class ReelsView extends Container {
         this.addChild(frame);
 
         for (let i = 0; i < REEL_COUNT; i++) {
-            const reel = new Reel(textures, timing);
+            const reel = new Reel(textures, timing, highlightStyle);
             reel.x = i * CELL_SIZE;
             this.symbolsLayer.addChild(reel);
             this.reels.push(reel);
